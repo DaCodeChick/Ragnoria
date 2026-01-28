@@ -1,6 +1,6 @@
 //! ProudNet encryption and decryption
 //!
-//! Based on packet capture analysis, ProudNet uses:
+//! ProudNet protocol uses dual-layer encryption:
 //! 1. RSA for session key exchange (opcodes 0x04, 0x05)
 //! 2. AES for encrypting game messages (opcode 0x25)
 //!
@@ -49,7 +49,7 @@ impl ProudNetCrypto {
     /// Parse RSA public key from DER-encoded data
     ///
     /// The server sends an ASN.1 DER encoded RSA public key in the 0x04 packet.
-    /// From frame 1946, the key starts at offset 0x28 in the payload.
+    /// The key starts at offset 0x28 in the payload.
     pub fn set_rsa_public_key_from_der(&mut self, der_data: &[u8]) -> Result<()> {
         let public_key = RsaPublicKey::from_pkcs1_der(der_data)
             .map_err(|e| anyhow::anyhow!("Failed to parse RSA public key: {}", e))?;
@@ -209,7 +209,7 @@ impl ProudNetCrypto {
 
     /// Decrypt a 0x25 encrypted packet
     ///
-    /// Structure from packet capture:
+    /// Packet structure:
     /// - Byte 0: 0x25 (opcode)
     /// - Byte 1: Sub-opcode (0x01 or 0x02)
     /// - Byte 2-3: Possible length field?

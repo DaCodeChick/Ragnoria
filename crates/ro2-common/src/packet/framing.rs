@@ -1,7 +1,6 @@
 //! RO2 Packet Framing Protocol
 //!
-//! Based on packet capture analysis of ro2login.pcapng.
-//! All RO2 packets use a consistent framing format:
+//! All RO2 network packets use a consistent framing format:
 //!
 //! ```text
 //! ┌─────────────────────────────────────────────────────────┐
@@ -164,7 +163,7 @@ impl PacketFrame {
 
 /// Write a variable-length integer
 ///
-/// Format discovered from packet capture:
+/// ProudNet varint format:
 /// - 1 byte: size_byte (1, 2, or 4)
 /// - N bytes: value (little endian)
 pub fn write_varint(buf: &mut Vec<u8>, value: u32) {
@@ -182,7 +181,7 @@ pub fn write_varint(buf: &mut Vec<u8>, value: u32) {
 
 /// Read a variable-length integer
 ///
-/// Format discovered from packet capture:
+/// ProudNet varint format:
 /// - 1 byte: size_byte (1, 2, or 4)
 /// - N bytes: value (little endian)
 pub fn read_varint(cursor: &mut Cursor<&[u8]>) -> Result<u32> {
@@ -235,8 +234,8 @@ mod tests {
     }
 
     #[test]
-    fn test_packet_frame_from_capture() {
-        // Frame 1940 from packet capture: 13 57 01 05 2f 0f 00 00 40
+    fn test_packet_frame_parsing() {
+        // Example policy request packet: 13 57 01 05 2f 0f 00 00 40
         let data = hex::decode("135701052f0f000040").unwrap();
 
         let (packet, size) = PacketFrame::from_bytes(&data).unwrap();

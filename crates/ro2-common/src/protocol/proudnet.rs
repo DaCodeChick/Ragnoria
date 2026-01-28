@@ -13,7 +13,7 @@
 //! ## TODO: Settings Structure Research
 //!
 //! The `ProudNetSettings` structure contains 10 u32 fields that are not fully
-//! understood. Current implementation uses values captured from frame 1946.
+//! understood. Current implementation uses known working values.
 //!
 //! **Known fields:**
 //! - `aes_key_bits`: AES key size (confirmed via Ghidra offset +0x638)
@@ -48,7 +48,8 @@ pub const FLASH_POLICY_XML: &str = r#"<?xml version="1.0"?>
 
 /// ProudNet connection settings for 0x04 packet
 ///
-/// Based on frame 1946 analysis. Some fields are not fully understood.
+/// These settings are sent during the encryption handshake.
+/// Some fields are not fully understood - see field comments for details.
 /// These match the structure deserialized by `DeserializeConnectionSettings` in client.
 #[derive(Debug, Clone)]
 pub struct ProudNetSettings {
@@ -86,9 +87,9 @@ pub struct ProudNetSettings {
 }
 
 impl Default for ProudNetSettings {
-    /// Default settings from captured frame 1946
+    /// Default ProudNet settings
     ///
-    /// **WARNING**: These are captured values from a specific session.
+    /// **WARNING**: These are known working values from protocol analysis.
     /// The actual meaning of most fields is unknown. Use with caution!
     fn default() -> Self {
         Self {
@@ -97,8 +98,8 @@ impl Default for ProudNetSettings {
             unknown1: 0x27c00001,
             unknown2: 0x00010009,
             timeout_secs: 60,           // Best guess based on value
-            aes_key_bits: 128,          // Confirmed: client uses at offset +0x638
-            fast_encrypt_key_bits: 512, // Confirmed: client uses at offset +0x63c
+            aes_key_bits: 128,          // Confirmed via Ghidra analysis
+            fast_encrypt_key_bits: 512, // Confirmed via Ghidra analysis
             unknown_flag1: 1,
             unknown_flag2: 1,
             unknown3: 0x02000000, // Could be 2 or 0x02000000 depending on endianness interpretation
@@ -345,7 +346,7 @@ impl ProudNetHandler {
         payload.push(ip_str.len() as u8);
         payload.extend_from_slice(ip_str.as_bytes());
 
-        // CRC placeholder (0xf6ac from capture)
+        // CRC/checksum field (purpose unclear)
         payload.extend_from_slice(&[0xac, 0xf6]);
 
         let frame = PacketFrame::new(payload);
