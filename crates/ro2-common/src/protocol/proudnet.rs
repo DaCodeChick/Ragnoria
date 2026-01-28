@@ -33,9 +33,13 @@
 use crate::crypto::ProudNetCrypto;
 use crate::packet::framing::PacketFrame;
 use anyhow::{anyhow, Result};
+#[cfg(feature = "server")]
 use rsa::pkcs1::EncodeRsaPublicKey;
+#[cfg(feature = "server")]
+#[cfg(feature = "server")]
 use std::net::SocketAddr;
 
+#[cfg(feature = "server")]
 /// Flash cross-domain policy XML
 ///
 /// Sent in response to 0x2F policy request.
@@ -46,6 +50,7 @@ pub const FLASH_POLICY_XML: &str = r#"<?xml version="1.0"?>
 <allow-access-from domain="*" to-ports="*" />
 </cross-domain-policy>"#;
 
+#[cfg(feature = "server")]
 /// ProudNet connection settings for 0x04 packet
 ///
 /// These settings are sent during the encryption handshake.
@@ -86,6 +91,7 @@ pub struct ProudNetSettings {
     pub unknown3: u32,
 }
 
+#[cfg(feature = "server")]
 impl Default for ProudNetSettings {
     /// Default ProudNet settings
     ///
@@ -107,6 +113,7 @@ impl Default for ProudNetSettings {
     }
 }
 
+#[cfg(feature = "server")]
 /// ProudNet protocol handler
 ///
 /// Manages encryption handshake and low-level protocol messages.
@@ -131,6 +138,7 @@ pub struct ProudNetHandler {
     settings: ProudNetSettings,
 }
 
+#[cfg(feature = "server")]
 impl ProudNetHandler {
     /// Create a new ProudNet handler for a connection
     pub fn new(remote_addr: SocketAddr) -> Self {
@@ -382,7 +390,7 @@ impl ProudNetHandler {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "server"))]
 mod tests {
     use super::*;
 

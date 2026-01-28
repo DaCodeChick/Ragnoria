@@ -25,7 +25,8 @@ chrono = { workspace = true }
 bcrypt = { workspace = true }
 
 [features]
-default = ["sqlite"]
+default = ["sqlite", "server"]
 sqlite = ["sqlx/sqlite"]
 mysql = ["sqlx/mysql"]
+server = []
 client = []

@@ -86,4 +86,5 @@ pub use handler::{
     GameMessageHandler, GameContext, ConnectionInfo, HandlerRegistry, BoxedHandler,
 };
 pub use dispatcher::{MessageDispatcher, DispatcherStats};
+#[cfg(feature = "server")]
 pub use proudnet::{ProudNetHandler, ProudNetSettings, FLASH_POLICY_XML};

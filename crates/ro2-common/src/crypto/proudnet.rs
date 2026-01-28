@@ -58,11 +58,13 @@ impl ProudNetCrypto {
         Ok(())
     }
 
+    #[cfg(feature = "server")]
     /// Set RSA private key (server-side)
     pub fn set_rsa_private_key(&mut self, private_key: RsaPrivateKey) {
         self.rsa_private = Some(private_key);
     }
 
+    #[cfg(feature = "server")]
     /// Generate a new RSA keypair (server-side)
     pub fn generate_rsa_keypair(&mut self, bits: usize) -> Result<()> {
         let mut rng = OsRng;
@@ -122,6 +124,7 @@ impl ProudNetCrypto {
         Ok(encrypted)
     }
 
+    #[cfg(feature = "server")]
     /// Decrypt session key with RSA (server-side, opcode 0x05)
     pub fn decrypt_session_key_rsa(&mut self, encrypted_key: &[u8]) -> Result<Vec<u8>> {
         let private_key = self
@@ -287,6 +290,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "server")]
     fn test_rsa_session_key_exchange() {
         // Server generates keypair
         let mut server = ProudNetCrypto::new();
