@@ -10,3 +10,5 @@ ro2-common = { path = "../ro2-common" }
 clap = { version = "4.5", features = ["derive"] }
 hex = "0.4"
 anyhow = { workspace = true }
+tokio = { workspace = true }
+local-ip-address = "0.6"
