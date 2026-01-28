@@ -18,12 +18,12 @@ pub enum MessageType {
     AckServerStatus = 0x0006,
     AckVersionCheck = 0x0007,
     ReqPing = 0x0008,
-    
+
     // Notifications
     NfyServerTime = 0x1000,
     NfyServerTimeToLoginPC = 0x1001,
     NfyChannelDisconnect = 0x1002,
-    
+
     // Placeholder for unknown messages
     Unknown = 0xFFFFFFFF,
 }
@@ -46,10 +46,25 @@ impl MessageType {
             _ => Self::Unknown,
         }
     }
-    
+
+    /// Convert u16 to MessageType (for RMI message IDs)
+    pub fn from_id(id: u16) -> Option<Self> {
+        let msg_type = Self::from_u32(id as u32);
+        if msg_type == Self::Unknown {
+            None
+        } else {
+            Some(msg_type)
+        }
+    }
+
     /// Convert MessageType to u32
     pub fn to_u32(self) -> u32 {
         self as u32
+    }
+
+    /// Convert MessageType to u16 (for RMI message IDs)
+    pub fn to_id(self) -> u16 {
+        self as u16
     }
 }
 
@@ -57,7 +72,7 @@ impl MessageType {
 pub trait ProudNetPacket: Sized {
     /// Serialize packet to bytes
     fn serialize(&self) -> crate::Result<Vec<u8>>;
-    
+
     /// Deserialize packet from bytes
     fn deserialize(data: &[u8]) -> crate::Result<Self>;
 }

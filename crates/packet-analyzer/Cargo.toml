@@ -1,0 +1,10 @@
+[package]
+name = "packet-analyzer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ro2-common = { path = "../ro2-common" }
+clap = { version = "4.5", features = ["derive"] }
+hex = "0.4"
+anyhow = "1.0"

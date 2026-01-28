@@ -1,6 +1,6 @@
 //! Database query functions
 
-use sqlx::{Pool, Sqlite, MySql};
+use sqlx::{Pool, Sqlite};
 use super::{Account, Character, Session};
 
 /// Account queries

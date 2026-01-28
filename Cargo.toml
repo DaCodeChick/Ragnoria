@@ -4,6 +4,7 @@ members = [
     "crates/ro2-login",
     "crates/ro2-lobby",
     "crates/ro2-world",
+    "crates/packet-analyzer",
 ]
 resolver = "2"
 
@@ -19,6 +20,7 @@ tokio = { version = "1", features = ["full"] }
 
 # Database
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "macros"] }
+chrono = "0.4"
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -33,6 +35,7 @@ aes = "0.8"
 rsa = "0.9"
 sha2 = "0.10"
 rand = "0.8"
+bcrypt = "0.15"
 
 # Logging
 tracing = "0.1"

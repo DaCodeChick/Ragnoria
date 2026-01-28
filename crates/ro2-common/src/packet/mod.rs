@@ -3,6 +3,8 @@
 //! All structures match the binary layout found in the client.
 //! See docs/ghidra-findings.md for detailed analysis.
 
+pub mod parser;
+
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use serde::{Deserialize, Serialize};
 use std::net::Ipv4Addr;
