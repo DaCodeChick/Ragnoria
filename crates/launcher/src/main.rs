@@ -265,71 +265,56 @@ impl Launcher {
         println!("SHIPPING directory: {:?}", shipping_dir);
         println!("Game root directory (with DLLs): {:?}", game_root_dir);
         println!("Working directory will be set to: {:?}", game_root_dir);
+        println!();
+        println!("NOTE: Based on Ghidra analysis, the game calls:");
+        println!("  - ParseGameLaunchArguments() to parse command line");
+        println!("  - GetGameServerIPFromCommandLine() to extract server IP");
+        println!("  - ValidateGameLaunchParameters() to validate params");
+        println!("We're bypassing Updater.exe entirely by passing server IP directly.");
+        println!();
 
-        // Check for Updater.exe in SHIPPING folder
-        // The game expects it there when launched with /FROM=-FromUpdater
-        let updater_in_shipping = shipping_dir.join("Updater.exe");
-        let updater_in_root = game_root_dir.join("Updater.exe");
+        // Based on Ghidra analysis of Rag2.exe:
+        // The game calls GetGameServerIPFromCommandLine() which extracts server IP
+        // from command-line parameters. We don't need /FROM or Updater.exe at all!
+        // Based on Ghidra analysis of Rag2.exe:
+        // The game calls GetGameServerIPFromCommandLine() which extracts server IP
+        // from command-line parameters. We don't need /FROM or Updater.exe at all!
         
-        if !updater_in_shipping.exists() {
-            println!("⚠ Updater.exe not found in SHIPPING folder");
-            
-            if updater_in_root.exists() {
-                println!("Found Updater.exe in root directory, copying to SHIPPING...");
-                if let Err(e) = std::fs::copy(&updater_in_root, &updater_in_shipping) {
-                    println!("✗ Failed to copy Updater.exe: {}", e);
-                    println!("  You may need to copy Updater.exe manually to SHIPPING folder");
-                } else {
-                    println!("✓ Copied Updater.exe to SHIPPING folder");
-                }
-            } else {
-                println!("✗ Updater.exe not found in root directory either");
-                println!("  Trying to launch anyway, but game may fail...");
-            }
-        } else {
-            println!("✓ Updater.exe found in SHIPPING folder");
-        }
-
-        // Try multiple parameter formats based on our analysis
-        // Format from RO2Client.exe: /FROM=-FromUpdater /STARTER=2 [additional_params]
-        // We need to test what parameters Rag2.exe accepts for server IP/port
-
+        // Try different parameter formats
         let commands_to_try = vec![
-            // Option 1: Without /FROM (skip updater check)
+            // Option 0: Just server IP and port (simplest, no updater needed)
+            vec![
+                self.server_ip.clone(),
+                self.server_port.clone(),
+            ],
+            // Option 1: With /IP and /PORT flags
             vec![
                 format!("/IP={}", self.server_ip),
                 format!("/PORT={}", self.server_port),
             ],
-            // Option 2: With /FROM but no STARTER
+            // Option 2: Alternative format with equals
             vec![
-                format!("/FROM=-Ragnoria"),
-                format!("/IP={}", self.server_ip),
-                format!("/PORT={}", self.server_port),
+                format!("IP={}", self.server_ip),
+                format!("PORT={}", self.server_port),
             ],
-            // Option 3: Original with /FROM and /STARTER
+            // Option 3: Combined server parameter
             vec![
-                format!("/FROM=-Ragnoria"),
-                format!("/STARTER=2"),
-                format!("/IP={}", self.server_ip),
-                format!("/PORT={}", self.server_port),
+                format!("{}:{}", self.server_ip, self.server_port),
             ],
-            // Option 4: Combined server parameter
+            // Option 4: With -server flag (common in games)
             vec![
-                format!("/SERVER={}:{}", self.server_ip, self.server_port),
-            ],
-            // Option 5: LoginServer parameter
-            vec![
-                format!("/LOGINSERVER={}:{}", self.server_ip, self.server_port),
+                String::from("-server"),
+                format!("{}:{}", self.server_ip, self.server_port),
             ],
         ];
 
-        // For now, try the first option (without /FROM to avoid Updater.exe requirement)
+        // Try the first option by default (simplest: just IP and port)
         // You can change this to test different parameter combinations:
-        // 0 = Just /IP and /PORT (no updater check)
-        // 1 = /FROM=-Ragnoria /IP /PORT
-        // 2 = /FROM=-Ragnoria /STARTER=2 /IP /PORT (requires Updater.exe)
-        // 3 = /SERVER=IP:PORT
-        // 4 = /LOGINSERVER=IP:PORT
+        // 0 = IP PORT (simplest, direct args)
+        // 1 = /IP=x.x.x.x /PORT=xxxx
+        // 2 = IP=x.x.x.x PORT=xxxx
+        // 3 = IP:PORT (combined)
+        // 4 = -server IP:PORT
         let option_index = std::env::var("LAUNCH_OPTION")
             .ok()
             .and_then(|s| s.parse::<usize>().ok())
@@ -338,15 +323,13 @@ impl Launcher {
         let args = commands_to_try.get(option_index).unwrap_or(&commands_to_try[0]);
 
         println!("Using launch option {}: {:?}", option_index, args);
-        println!("Command line arguments: {:?}", args);
-        println!("Full command: {:?} {:?}", game_path, args);
         println!();
         println!("To try different options, set LAUNCH_OPTION environment variable:");
-        println!("  LAUNCH_OPTION=0  - /IP /PORT (default, no updater)");
-        println!("  LAUNCH_OPTION=1  - /FROM=-Ragnoria /IP /PORT");
-        println!("  LAUNCH_OPTION=2  - /FROM=-Ragnoria /STARTER=2 /IP /PORT");
-        println!("  LAUNCH_OPTION=3  - /SERVER=IP:PORT");
-        println!("  LAUNCH_OPTION=4  - /LOGINSERVER=IP:PORT");
+        println!("  LAUNCH_OPTION=0  - IP PORT (default, simplest)");
+        println!("  LAUNCH_OPTION=1  - /IP=x.x.x.x /PORT=xxxx");
+        println!("  LAUNCH_OPTION=2  - IP=x.x.x.x PORT=xxxx");
+        println!("  LAUNCH_OPTION=3  - IP:PORT combined");
+        println!("  LAUNCH_OPTION=4  - -server IP:PORT");
         println!();
 
         #[cfg(target_os = "windows")]
