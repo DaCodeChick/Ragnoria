@@ -5,7 +5,7 @@
 
 pub mod parser;
 
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{Buf, BufMut, BytesMut};
 use serde::{Deserialize, Serialize};
 use std::net::Ipv4Addr;
 
@@ -184,8 +184,10 @@ mod tests {
 
     #[test]
     fn test_packet_header_size() {
-        assert_eq!(std::mem::size_of::<u32>() * 4 + 2 + 2, 18); // Not exactly 16 due to Rust padding
-                                                                // In C with #pragma pack, it would be exactly 16 bytes
+        // Note: Rust struct size != serialized size due to alignment/padding
+        // The serialized form is always 16 bytes (PacketHeader::SIZE)
+        // In-memory size may vary due to Rust's layout rules
+        assert_eq!(PacketHeader::SIZE, 16);
     }
 
     #[test]

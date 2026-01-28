@@ -1,7 +1,7 @@
 //! Database query functions
 
 use sqlx::{Pool, Sqlite};
-use super::{Account, Character, Session};
+use super::{Account, Session};
 
 /// Account queries
 pub struct AccountQueries;

@@ -1,7 +1,6 @@
 //! Cryptography utilities for AES/RSA encryption
 
-use aes::Aes128;
-use rand::Rng;
+use rand::RngCore;
 use rsa::{RsaPrivateKey, RsaPublicKey};
 
 /// Crypto handler for session encryption
@@ -36,32 +35,33 @@ impl CryptoHandler {
     /// Generate AES session key (128-bit)
     pub fn generate_session_key(&mut self) -> crate::Result<Vec<u8>> {
         let mut rng = rand::thread_rng();
-        let key: [u8; 16] = rng.gen();
+        let mut key = [0u8; 16];
+        rng.fill_bytes(&mut key);
         self.aes_key = key.to_vec();
         Ok(self.aes_key.clone())
     }
 
     /// Encrypt data with AES
-    pub fn encrypt_aes(&self, data: &[u8]) -> crate::Result<Vec<u8>> {
+    pub fn encrypt_aes(&self, _data: &[u8]) -> crate::Result<Vec<u8>> {
         // TODO: Implement AES encryption
         // Requires determining AES mode (CBC, CTR, GCM) from client analysis
         anyhow::bail!("AES encryption not yet implemented - requires packet capture analysis")
     }
 
     /// Decrypt data with AES
-    pub fn decrypt_aes(&self, data: &[u8]) -> crate::Result<Vec<u8>> {
+    pub fn decrypt_aes(&self, _data: &[u8]) -> crate::Result<Vec<u8>> {
         // TODO: Implement AES decryption
         anyhow::bail!("AES decryption not yet implemented - requires packet capture analysis")
     }
 
     /// Encrypt data with RSA public key
-    pub fn encrypt_rsa(&self, data: &[u8]) -> crate::Result<Vec<u8>> {
+    pub fn encrypt_rsa(&self, _data: &[u8]) -> crate::Result<Vec<u8>> {
         // TODO: Implement RSA encryption
         anyhow::bail!("RSA encryption not yet implemented - requires deeper analysis")
     }
 
     /// Decrypt data with RSA private key
-    pub fn decrypt_rsa(&self, data: &[u8]) -> crate::Result<Vec<u8>> {
+    pub fn decrypt_rsa(&self, _data: &[u8]) -> crate::Result<Vec<u8>> {
         // TODO: Implement RSA decryption
         anyhow::bail!("RSA decryption not yet implemented - requires deeper analysis")
     }
