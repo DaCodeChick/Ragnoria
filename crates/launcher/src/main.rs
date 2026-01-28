@@ -250,12 +250,21 @@ impl Launcher {
         use std::process::Command;
 
         let game_path = PathBuf::from(&self.game_path);
-        let game_dir = game_path
+        
+        // Get the SHIPPING directory (parent of Rag2.exe)
+        let shipping_dir = game_path
             .parent()
             .ok_or_else(|| anyhow::anyhow!("Invalid game path"))?;
+        
+        // Get the root game directory (parent of SHIPPING, where DLLs are)
+        let game_root_dir = shipping_dir
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("Invalid game directory structure"))?;
 
         println!("Game executable: {:?}", game_path);
-        println!("Working directory: {:?}", game_dir);
+        println!("SHIPPING directory: {:?}", shipping_dir);
+        println!("Game root directory (with DLLs): {:?}", game_root_dir);
+        println!("Working directory will be set to: {:?}", game_root_dir);
 
         // Try multiple parameter formats based on our analysis
         // Format from RO2Client.exe: /FROM=-FromUpdater /STARTER=2 [additional_params]
@@ -294,7 +303,7 @@ impl Launcher {
             println!("Platform: Windows (native execution)");
             let result = Command::new(&game_path)
                 .args(args)
-                .current_dir(game_dir)
+                .current_dir(game_root_dir)
                 .spawn();
             
             match &result {
@@ -311,7 +320,7 @@ impl Launcher {
             let result = Command::new("wine")
                 .arg(&game_path)
                 .args(args)
-                .current_dir(game_dir)
+                .current_dir(game_root_dir)
                 .spawn();
             
             match &result {
