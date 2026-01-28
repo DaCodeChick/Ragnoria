@@ -1,0 +1,55 @@
+[workspace]
+members = [
+    "crates/ro2-common",
+    "crates/ro2-login",
+    "crates/ro2-lobby",
+    "crates/ro2-world",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/yourusername/ragnoria"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Database
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "macros"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+bincode = "1"
+
+# Networking & byte manipulation
+bytes = "1"
+
+# Cryptography
+aes = "0.8"
+rsa = "0.9"
+sha2 = "0.10"
+rand = "0.8"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Error handling
+anyhow = "1"
+thiserror = "1"
+
+# Configuration
+config = "0.14"
+dotenv = "0.15"
+
+[profile.dev]
+opt-level = 0
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

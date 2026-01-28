@@ -1,0 +1,20 @@
+[package]
+name = "ro2-login"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ro2-common = { path = "../ro2-common" }
+tokio = { workspace = true }
+sqlx = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+config = { workspace = true }
+dotenv = { workspace = true }
+
+[features]
+default = ["sqlite"]
+sqlite = ["ro2-common/sqlite", "sqlx/sqlite"]
+mysql = ["ro2-common/mysql", "sqlx/mysql"]
