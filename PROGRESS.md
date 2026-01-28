@@ -1,6 +1,237 @@
 # Ragnoria Development Progress
 
-## Session 3 Completion Summary (Latest)
+## Session 4 Completion Summary (Latest)
+
+### What Was Accomplished
+
+✅ **Deep Ghidra Analysis - Function Renaming**
+- Successfully renamed 7 functions using Ghidra MCP server:
+  - `FUN_00995900` → `UI_IsDialogOpen` (checks if dialog window is visible)
+  - `FUN_006ae6f0` → `GetItemCount` (retrieves item count by ID)
+  - `FUN_006aec70` → `InitiateServerConnection` (starts connection process)
+  - `FUN_0044b110` → `VectorLength` (calculates 3D vector magnitude)
+  - `FUN_00464c40` → `ReleasePlayerReference` (decrements player ref count)
+  - `FUN_004d8bd0` → `CleanupPlayerIterator` (iterator cleanup)
+  - `FUN_004d8400` → `AdvancePlayerIterator` (move to next player)
+
+✅ **Main Game Loop Analysis**
+- Traced complete execution flow from `WinMain @ 0x00A502F0`
+- Documented `MainGameLoopUpdate @ 0x00A4C300` (750-line analysis document)
+- Identified 10-phase game loop execution:
+  1. Time Management (delta time calculation)
+  2. Frame Rate Adjustment (High/Medium/Normal tiers)
+  3. Timer Updates (3 separate timer instances)
+  4. Network Update Phase 1 (pre-game-logic, receive messages)
+  5. Game State Update (process game logic)
+  6. Renderer Update (Gamebryo engine)
+  7. Sound Manager Update (FMOD system)
+  8. Network Update Phase 2 (post-game-logic, send messages)
+  9. Shutdown Check (global flag mechanism)
+  10. Rendering (frame output)
+
+✅ **Network Processing Architecture**
+- **Two-Phase Network Model Discovered:**
+  - **Phase 1 (vtable+0x24)**: Receives and queues incoming messages BEFORE game logic
+  - **Phase 2 (vtable+0x28)**: Sends outgoing messages AFTER game logic completes
+  - This allows game state to react to received messages in the same frame
+- **NetworkManager Global:** `g_NetworkManager_ProudNetClient @ 0x015B53AC`
+- **GetNetworkManager Function:** `@ 0x00A30660` (80+ references in codebase)
+
+✅ **Frame Rate Adaptation System**
+- Three performance tiers based on `GameStateManager` performance metric:
+  - **High**: Best performance, highest FPS target
+  - **Medium**: Moderate performance, mid FPS target  
+  - **Normal**: Low performance, minimum FPS target
+- Dynamic switching based on real-time performance monitoring
+- Performance thresholds at `DOUBLE_01358008` and `DOUBLE_0135b6d8`
+
+✅ **Timer Management System**
+- Three timer instances identified:
+  - **Timer 0**: Main game timer (frame deltas)
+  - **Timer 1**: Secondary timer (frame-based, can be paused)
+  - **Timer 2**: Tertiary timer (alternate, gets reset)
+- Timer structure (partial):
+  ```c
+  struct GameTimer {
+      float targetFrameRate;      // +0x08
+      float currentDelta;         // +0x10
+      char isPaused;              // +0x14
+  };
+  ```
+
+✅ **Critical Globals Mapped**
+| Variable | Address | Type | Description |
+|----------|---------|------|-------------|
+| `g_NetworkManager_ProudNetClient` | 0x015B53AC | `void*` | ProudNet network manager |
+| `g_GameStateManager` | 0x015C9088 | `void*` | Game state manager |
+| `g_RendererInstance` | 0x015D7708 | `void*` | Gamebryo renderer |
+| `g_UIManager` | 0x015B17A8 | `void*` | UI manager |
+| `g_ShutdownRequested` | 0x015A1C10 | `bool` | Shutdown flag |
+| `PTR_FUN_015a5244` | 0x015A5244 | `FatalErrorHandler*` | Fatal error callback |
+
+✅ **ProudNet Strings Discovered**
+- Found 31 ProudNet-related strings in binary:
+  - `"Proud::CNetClientWorker::ProcessMessage_ProudNetLayer"` @ 0x01458560
+  - `"Proud::CNetCoreImpl::Send_SecureLayer"` @ 0x01457b50
+  - `"Proud::CNetCoreImpl::ProcessMessage_Encrypted"` @ 0x01457c90
+  - `"Proud::CFastSocket::Connect"` @ 0x014599ec
+  - `"Proud::CFastSocket::IssueRecv"` @ 0x01459a24
+  - `"Proud::CFastSocket::IssueSend"` @ 0x01459b3c
+  - Plus 25 more related to heap management, critical sections, sockets
+
+✅ **Documentation Created**
+- **`docs/ghidra-findings/GAME-LOOP-ANALYSIS.md`** (750 lines)
+  - Complete MainGameLoopUpdate flow diagram
+  - Network processing model (two-phase design)
+  - Frame rate adaptation algorithm
+  - Timer management details
+  - Shutdown sequence documentation
+  - Structure definitions (GameStateManager, GameTimer, Renderer, etc.)
+  - Critical functions table (50+ functions)
+  - Implementation notes for Rust server
+
+✅ **Manager Singleton Pattern Identified**
+All critical subsystems use singleton getters:
+- `GetNetworkManager()` - Returns network manager
+- `GetGameStateManager()` - Returns game state
+- `GetGameTimersInstance()` - Returns timer manager
+- `GetRendererInstance()` - Returns renderer
+- `GetSoundManager()` - Returns sound system (nullable)
+- `GetGameConfigurationManager()` - Returns config manager
+- `GetLocalizationManager()` - Returns localization system
+
+### Key Discoveries
+
+1. **Message Processing Model**
+   ```
+   Receive Messages → Queue → Process Game Logic → Send Responses
+   ```
+   This two-phase design ensures responses reflect updated game state.
+
+2. **Frame Timing**
+   - Game uses `GetCurrentGameTime()` returning 80-bit float (float10)
+   - Delta time is clamped to prevent large jumps during lag
+   - Sleep(0) yields CPU but allows immediate re-scheduling
+
+3. **Input Handling**
+   - Special routing for input messages when `g_InputSystemEnabled == false`
+   - Key messages (WM_KEYDOWN through WM_KEYLAST) get forwarded to `g_InputWindow`
+   - TranslateMessage/DispatchMessage handle standard Windows messages
+
+4. **Shutdown Mechanism**
+   - Global flag `g_ShutdownRequested` triggers shutdown
+   - `HandleGameShutdownRequest()` initiates cleanup
+   - `CleanupNetworkAndResources()` called at exit (atexit registered)
+
+### Build Status
+```
+✅ cargo check --workspace  (clean)
+✅ cargo build --workspace  (clean)
+✅ git commit successful     (8aab852)
+```
+
+### Git Commits
+
+- **Commit 1 (b4ccb5f):** Initial project scaffold
+- **Commit 2 (5d14e19):** Packet analysis tooling, migrations, RMI parser
+- **Commit 3 (5cddd6a):** Add progress tracking document
+- **Commit 4 (4c2cc5c):** Add quick reference card
+- **Commit 5 (13d8ef4):** Modernize to Rust 2024 edition
+- **Commit 6 (6cde17a):** Update PROGRESS.md with session 3 summary
+- **Commit 7 (6d1af18):** Add Ghidra analysis guidelines to AGENTS.md
+- **Commit 8 (48c4585):** Add comprehensive WinMain traversal analysis
+- **Commit 9 (8aab852):** Add game loop and network processing analysis ← YOU ARE HERE
+
+### Next Steps (Priority Order)
+
+#### 🔴 Critical: Continue Ghidra Analysis
+
+1. **Find Network VTable Functions** (HIGH PRIORITY)
+   - Disassemble NetworkManager vtable to get function pointers at offsets 0x24 and 0x28
+   - Decompile and analyze both network update functions
+   - Trace to message dispatch handlers
+   - Document complete message processing flow
+
+2. **Analyze GameStateManager_Update** (HIGH PRIORITY)
+   - Decompile and trace game state update flow
+   - Identify message processing callbacks
+   - Find RMI message handlers
+   - Map state machine transitions
+
+3. **ProudNet Message Handlers** (HIGH PRIORITY)
+   - Find and analyze handlers for system messages:
+     - `0x0B` - Version check
+     - `0x1F` - TCP connection established
+     - `0x20` - TCP disconnection
+   - Determine message dispatch table structure
+   - Document handler signatures
+
+4. **Localization String Table** (MEDIUM PRIORITY)
+   - Analyze `LocalizationManager_GetString` implementation
+   - Find string table location in binary
+   - Extract string IDs and their English text
+   - Create reference table
+
+5. **Rename Remaining Functions** (ONGOING)
+   - Continue systematic renaming following AGENTS.md guidelines
+   - Focus on ProudNet and network-related functions
+   - Document function parameters and return types
+
+#### 🟡 Code Implementation
+
+6. **Update MessageType Enum** (MEDIUM PRIORITY)
+   - Add system message IDs discovered: `0x0B`, `0x1F`, `0x20`
+   - Add game RMI message IDs when found
+   - Update `crates/ro2-common/src/protocol/mod.rs`
+
+7. **Implement Network Processing Model** (MEDIUM PRIORITY)
+   - Design two-phase network update in Rust
+   - Create message queue system
+   - Implement pre/post game logic hooks
+
+8. **Crypto Analysis** (LOW PRIORITY - after finding handlers)
+   - Analyze ProudNet encryption functions if referenced
+   - Determine AES mode and padding
+   - Implement in `crates/ro2-common/src/crypto/mod.rs`
+
+### Resources for Next Session
+
+- **Ghidra MCP Server:** Connected to Rag2.exe
+- **Analysis Documents:**
+  - `docs/ghidra-findings/WINMAIN-ANALYSIS.md` (600 lines)
+  - `docs/ghidra-findings/GAME-LOOP-ANALYSIS.md` (750 lines)
+- **Naming Conventions:** `.opencode/AGENTS.md`
+- **ProudNet Strings:** 31 identified at addresses 0x01450110+
+- **Network Manager Global:** 0x015B53AC
+
+### Important Notes
+
+⚠️ **Network VTable Analysis Pending**  
+The vtable function pointers at offsets 0x24 and 0x28 need to be extracted by disassembling the vtable structure. This is the next critical step to understand message processing.
+
+⚠️ **Message Dispatch Table Not Found Yet**  
+Need to locate the ProudNet message dispatch table that maps message IDs to handler functions.
+
+⚠️ **Global Variable Addresses Partially Confirmed**  
+Some globals from WinMain analysis have confirmed addresses, others (timer-related, frame rate constants) need confirmation through further analysis.
+
+### Questions Answered This Session
+
+Q: How does the client process network messages?  
+A: Two-phase update: (1) Receive/queue before game logic, (2) Send/flush after game logic. This allows same-frame reactions.
+
+Q: What is the main game loop structure?  
+A: 10-phase execution: time management → frame rate adaptation → timers → network phase 1 → game logic → renderer → sound → network phase 2 → shutdown check → render.
+
+Q: How are managers accessed throughout the codebase?  
+A: Singleton pattern with getter functions (GetNetworkManager, GetGameStateManager, etc.) returning global pointers.
+
+Q: What is the frame rate system?  
+A: Dynamic 3-tier system (High/Medium/Normal) that adjusts FPS targets based on real-time performance metrics from GameStateManager.
+
+---
+
+## Session 3 Completion Summary
 
 ### What Was Accomplished
 
