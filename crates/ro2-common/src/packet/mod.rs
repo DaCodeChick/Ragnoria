@@ -3,7 +3,10 @@
 //! All structures match the binary layout found in the client.
 //! See docs/ghidra-findings.md for detailed analysis.
 
+pub mod framing;
 pub mod parser;
+
+pub use framing::{read_varint, write_varint, PacketFrame, PACKET_MAGIC};
 
 use bytes::{Buf, BufMut, BytesMut};
 use serde::{Deserialize, Serialize};

@@ -1,5 +1,9 @@
 //! Cryptography utilities for AES/RSA encryption
 
+pub mod proudnet;
+
+pub use proudnet::ProudNetCrypto;
+
 use rand::RngCore;
 use rsa::{RsaPrivateKey, RsaPublicKey};
 

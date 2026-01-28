@@ -1431,6 +1431,7 @@ dependencies = [
  "bcrypt",
  "bytes",
  "chrono",
+ "hex",
  "postcard",
  "rand",
  "rsa",
