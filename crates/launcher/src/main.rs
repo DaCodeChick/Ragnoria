@@ -6,6 +6,12 @@ mod config;
 use config::Config;
 
 fn main() -> iced::Result {
+    println!("===========================================");
+    println!("    Ragnoria Launcher v0.1.0");
+    println!("    RO2 Custom Server Launcher");
+    println!("===========================================");
+    println!("Starting GUI application...\n");
+    
     iced::application("Ragnoria Launcher", Launcher::update, Launcher::view)
         .window_size((600.0, 400.0))
         .run_with(Launcher::new)
@@ -18,6 +24,7 @@ enum Message {
     GamePathChanged(String),
     LaunchGame,
     BrowseGamePath,
+    GamePathSelected(Option<PathBuf>),
 }
 
 struct Launcher {
@@ -30,7 +37,14 @@ struct Launcher {
 
 impl Launcher {
     fn new() -> (Self, Task<Message>) {
+        println!("Loading configuration...");
         let config = Config::load().unwrap_or_default();
+        
+        println!("Config loaded:");
+        println!("  Server IP: {}", config.server.ip);
+        println!("  Server Port: {}", config.server.port);
+        println!("  Game Path: {}", if config.game_path.is_empty() { "(not set)" } else { &config.game_path });
+        println!();
 
         let launcher = Self {
             server_ip: config.server.ip.clone(),
@@ -46,25 +60,55 @@ impl Launcher {
     fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::ServerIpChanged(ip) => {
+                println!("Server IP changed to: {}", ip);
                 self.server_ip = ip;
+                Task::none()
             }
             Message::ServerPortChanged(port) => {
+                println!("Server port changed to: {}", port);
                 self.server_port = port;
+                Task::none()
             }
             Message::GamePathChanged(path) => {
+                println!("Game path changed to: {}", path);
                 self.game_path = path;
+                Task::none()
             }
             Message::LaunchGame => {
+                println!("\n=== LAUNCH GAME BUTTON CLICKED ===");
+                println!("Server IP: {}", self.server_ip);
+                println!("Server Port: {}", self.server_port);
+                println!("Game Path: {}", self.game_path);
                 self.launch_game();
+                println!("=== LAUNCH ATTEMPT COMPLETE ===\n");
+                Task::none()
             }
             Message::BrowseGamePath => {
-                self.status_message = String::from(
-                    "File browser not yet implemented. Please type the full path to Rag2.exe",
-                );
+                println!("Browse button clicked - opening file dialog...");
+                Task::perform(
+                    async {
+                        rfd::AsyncFileDialog::new()
+                            .add_filter("Rag2 Executable", &["exe"])
+                            .set_title("Select Rag2.exe")
+                            .pick_file()
+                            .await
+                            .map(|handle| handle.path().to_path_buf())
+                    },
+                    Message::GamePathSelected,
+                )
+            }
+            Message::GamePathSelected(path) => {
+                if let Some(path) = path {
+                    println!("File selected: {:?}", path);
+                    self.game_path = path.to_string_lossy().to_string();
+                    self.status_message = format!("Selected: {}", self.game_path);
+                } else {
+                    println!("File selection cancelled");
+                    self.status_message = String::from("File selection cancelled");
+                }
+                Task::none()
             }
         }
-
-        Task::none()
     }
 
     fn view(&self) -> Element<'_, Message> {
@@ -133,48 +177,71 @@ impl Launcher {
     }
 
     fn launch_game(&mut self) {
+        println!("Validating inputs...");
+        
         // Validate inputs
         if self.server_ip.trim().is_empty() {
-            self.status_message = String::from("Error: Server IP is required");
+            let msg = "Error: Server IP is required";
+            println!("VALIDATION ERROR: {}", msg);
+            self.status_message = String::from(msg);
             return;
         }
+        println!("✓ Server IP is valid: {}", self.server_ip);
 
         let port = match self.server_port.parse::<u16>() {
-            Ok(p) => p,
-            Err(_) => {
-                self.status_message = String::from("Error: Invalid port number");
+            Ok(p) => {
+                println!("✓ Server port is valid: {}", p);
+                p
+            }
+            Err(e) => {
+                let msg = format!("Error: Invalid port number - {}", e);
+                println!("VALIDATION ERROR: {}", msg);
+                self.status_message = msg;
                 return;
             }
         };
 
         if self.game_path.trim().is_empty() {
-            self.status_message = String::from("Error: Game path is required");
+            let msg = "Error: Game path is required";
+            println!("VALIDATION ERROR: {}", msg);
+            self.status_message = String::from(msg);
             return;
         }
+        println!("✓ Game path provided: {}", self.game_path);
 
         let game_path = PathBuf::from(&self.game_path);
         if !game_path.exists() {
-            self.status_message = format!("Error: Game executable not found at {}", self.game_path);
+            let msg = format!("Error: Game executable not found at {}", self.game_path);
+            println!("VALIDATION ERROR: {}", msg);
+            self.status_message = msg;
             return;
         }
+        println!("✓ Game executable exists");
 
         // Save config before launching
+        println!("Saving configuration...");
         self.config.server.ip = self.server_ip.clone();
         self.config.server.port = port;
         self.config.game_path = self.game_path.clone();
 
         if let Err(e) = self.config.save() {
             eprintln!("Warning: Failed to save config: {}", e);
+        } else {
+            println!("✓ Configuration saved");
         }
 
         // Launch the game with parameters
+        println!("Attempting to launch game...");
         match self.launch_game_process() {
             Ok(_) => {
-                self.status_message =
-                    format!("Game launched! Connecting to {}:{}", self.server_ip, port);
+                let msg = format!("Game launched! Connecting to {}:{}", self.server_ip, port);
+                println!("✓ SUCCESS: {}", msg);
+                self.status_message = msg;
             }
             Err(e) => {
-                self.status_message = format!("Error launching game: {}", e);
+                let msg = format!("Error launching game: {}", e);
+                println!("✗ LAUNCH ERROR: {}", msg);
+                self.status_message = msg;
             }
         }
     }
@@ -186,6 +253,9 @@ impl Launcher {
         let game_dir = game_path
             .parent()
             .ok_or_else(|| anyhow::anyhow!("Invalid game path"))?;
+
+        println!("Game executable: {:?}", game_path);
+        println!("Working directory: {:?}", game_dir);
 
         // Try multiple parameter formats based on our analysis
         // Format from RO2Client.exe: /FROM=-FromUpdater /STARTER=2 [additional_params]
@@ -216,24 +286,40 @@ impl Launcher {
         // For now, try the first option
         let args = &commands_to_try[0];
 
-        println!("Launching game: {:?} with args: {:?}", game_path, args);
+        println!("Command line arguments: {:?}", args);
+        println!("Full command: {:?} {:?}", game_path, args);
 
         #[cfg(target_os = "windows")]
         {
-            Command::new(&game_path)
+            println!("Platform: Windows (native execution)");
+            let result = Command::new(&game_path)
                 .args(args)
                 .current_dir(game_dir)
-                .spawn()?;
+                .spawn();
+            
+            match &result {
+                Ok(child) => println!("✓ Process spawned successfully! PID: {:?}", child.id()),
+                Err(e) => println!("✗ Failed to spawn process: {}", e),
+            }
+            
+            result?;
         }
 
         #[cfg(not(target_os = "windows"))]
         {
-            // On Linux, try with Wine
-            Command::new("wine")
+            println!("Platform: Linux/Unix (Wine execution)");
+            let result = Command::new("wine")
                 .arg(&game_path)
                 .args(args)
                 .current_dir(game_dir)
-                .spawn()?;
+                .spawn();
+            
+            match &result {
+                Ok(child) => println!("✓ Process spawned successfully! PID: {:?}", child.id()),
+                Err(e) => println!("✗ Failed to spawn process: {}", e),
+            }
+            
+            result?;
         }
 
         Ok(())
