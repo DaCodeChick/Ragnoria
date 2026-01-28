@@ -72,18 +72,31 @@ Opcode: 0x04 (ProudNet EncryptionHandshake)
 Payload: Contains RSA public key and parameters
 ```
 
+**Full Hex Dump:**
+```
+1357 02b7 00 04 00000000 01000000 0100c027 09000100 3c000000 80000000 
+00020000 01000000 01000000 00000002 8c00 30818902818100bf58e6615125df63...
+```
+
 **Structure Analysis:**
 ```
-04 00000000 01000000 0100c027 09000100 3c000000 80000000 00020000
-│  │        │        │        │        │        │        │
-│  Flags?  Version? Unknown  KeyLen?  Modulus? Exponent? Unknown
+04 00000000 01000000 0100c027 09000100 3c000000 80000000 00020000 01000000 01000000 00000002 8c00 [DER key]
+│  │        │        │        │        │        │        │        │        │        │        │    │
+│  Flags   Version  Settings Settings Settings Settings Settings Settings Settings Settings Len  RSA Key (DER)
+│  (u32)   (u32)    (u32)    (u32)    (u32)    (u32)    (u32)    (u32)    (u32)    (u32)    u16
+│
+Opcode 0x04
+
+Bytes 0-44:  ProudNet encryption handshake header
+Byte 45+:    RSA public key (DER encoded)
 ```
 
 **RSA Public Key Found:**
-- Offset 0x28: `30 81 89 02 81 81 00 bf 58 e6 61 51 25 df 63...`
+- **Offset 0x2D (45 bytes)**: `30 81 89 02 81 81 00 bf 58 e6 61 51 25 df 63...`
 - This is ASN.1 DER encoded RSA public key
-- Length: ~140 bytes
-- Exponent: `01 00 01` (65537)
+- DER Length: 140 bytes (0x8C = 140 decimal, matches u16 at offset 43)
+- Modulus: 1024-bit (128 bytes)
+- Exponent: `01 00 01` (65537, standard RSA exponent)
 
 **Ghidra Reference:** `HandleProudNet_0x04_EncryptionHandshake`
 

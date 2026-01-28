@@ -80,8 +80,10 @@ pub trait ProudNetPacket: Sized {
 pub mod rmi;
 pub mod handler;
 pub mod dispatcher;
+pub mod proudnet;
 
 pub use handler::{
     GameMessageHandler, GameContext, ConnectionInfo, HandlerRegistry, BoxedHandler,
 };
 pub use dispatcher::{MessageDispatcher, DispatcherStats};
+pub use proudnet::{ProudNetHandler, FLASH_POLICY_XML};
