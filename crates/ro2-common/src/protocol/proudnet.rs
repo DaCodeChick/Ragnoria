@@ -9,6 +9,26 @@
 //! - 0x0A: Connection success (session ID)
 //! - 0x1B/0x1D: Heartbeat
 //! - 0x25/0x26: Encrypted game messages
+//!
+//! ## TODO: Settings Structure Research
+//!
+//! The `ProudNetSettings` structure contains 10 u32 fields that are not fully
+//! understood. Current implementation uses values captured from frame 1946.
+//!
+//! **Known fields:**
+//! - `aes_key_bits`: AES key size (confirmed via Ghidra offset +0x638)
+//! - `fast_encrypt_key_bits`: Fast encrypt key size (confirmed via Ghidra offset +0x63c)
+//!
+//! **Research needed:**
+//! - What do the unknown fields control?
+//! - Are these values static or dynamic?
+//! - How does changing them affect client behavior?
+//!
+//! To investigate:
+//! 1. Search for `DeserializeConnectionSettings` function in Ghidra
+//! 2. Analyze how each field is used after deserialization
+//! 3. Test with modified values to observe client reactions
+//! 4. Cross-reference with ProudNet SDK documentation if available
 
 use crate::crypto::ProudNetCrypto;
 use crate::packet::framing::PacketFrame;
@@ -25,6 +45,66 @@ pub const FLASH_POLICY_XML: &str = r#"<?xml version="1.0"?>
 <cross-domain-policy>
 <allow-access-from domain="*" to-ports="*" />
 </cross-domain-policy>"#;
+
+/// ProudNet connection settings for 0x04 packet
+///
+/// Based on frame 1946 analysis. Some fields are not fully understood.
+/// These match the structure deserialized by `DeserializeConnectionSettings` in client.
+#[derive(Debug, Clone)]
+pub struct ProudNetSettings {
+    /// Flags (unknown purpose) - observed: 0x00000000
+    pub flags: u32,
+
+    /// Protocol version - observed: 0x01000000 (v1)
+    pub version: u32,
+
+    /// Unknown setting 1 - observed: 0x27c00001
+    pub unknown1: u32,
+
+    /// Unknown setting 2 - observed: 0x00010009
+    pub unknown2: u32,
+
+    /// Possibly timeout in seconds - observed: 60 (0x3c)
+    pub timeout_secs: u32,
+
+    /// AES key size in BITS - observed: 128 (AES-128)
+    /// Client uses this at offset +0x638, divides by 8 for bytes
+    pub aes_key_bits: u32,
+
+    /// Fast encrypt key size in BITS - observed: 512
+    /// Client uses this at offset +0x63c, divides by 8 for bytes  
+    pub fast_encrypt_key_bits: u32,
+
+    /// Unknown flag 1 - observed: 1 (enabled?)
+    pub unknown_flag1: u32,
+
+    /// Unknown flag 2 - observed: 1 (enabled?)
+    pub unknown_flag2: u32,
+
+    /// Unknown setting 3 - observed: 0x02000000 or 2 (LE ambiguous)
+    pub unknown3: u32,
+}
+
+impl Default for ProudNetSettings {
+    /// Default settings from captured frame 1946
+    ///
+    /// **WARNING**: These are captured values from a specific session.
+    /// The actual meaning of most fields is unknown. Use with caution!
+    fn default() -> Self {
+        Self {
+            flags: 0x00000000,
+            version: 0x01000000,
+            unknown1: 0x27c00001,
+            unknown2: 0x00010009,
+            timeout_secs: 60,           // Best guess based on value
+            aes_key_bits: 128,          // Confirmed: client uses at offset +0x638
+            fast_encrypt_key_bits: 512, // Confirmed: client uses at offset +0x63c
+            unknown_flag1: 1,
+            unknown_flag2: 1,
+            unknown3: 0x02000000, // Could be 2 or 0x02000000 depending on endianness interpretation
+        }
+    }
+}
 
 /// ProudNet protocol handler
 ///
@@ -45,11 +125,19 @@ pub struct ProudNetHandler {
 
     /// Version from client
     client_version: Option<u32>,
+
+    /// ProudNet settings for this connection
+    settings: ProudNetSettings,
 }
 
 impl ProudNetHandler {
     /// Create a new ProudNet handler for a connection
     pub fn new(remote_addr: SocketAddr) -> Self {
+        Self::with_settings(remote_addr, ProudNetSettings::default())
+    }
+
+    /// Create a new ProudNet handler with custom settings
+    pub fn with_settings(remote_addr: SocketAddr, settings: ProudNetSettings) -> Self {
         let mut crypto = ProudNetCrypto::new();
 
         // Generate RSA keypair (1024-bit as used by RO2)
@@ -63,6 +151,7 @@ impl ProudNetHandler {
             session_id: None,
             encryption_ready: false,
             client_version: None,
+            settings,
         }
     }
 
@@ -101,9 +190,9 @@ impl ProudNetHandler {
     /// └─ Opcode
     ///
     /// Settings (10 x u32 = 40 bytes):
-    /// - Flags (0x00000000)
-    /// - Version (0x01000000)
-    /// - Settings 1-8 (observed values from capture)
+    /// - See ProudNetSettings structure for field descriptions
+    /// - Most fields are not fully understood yet
+    /// - AES key size and fast encrypt key size are confirmed
     /// ```
     pub fn build_encryption_handshake(&self) -> Result<Vec<u8>> {
         let mut payload = Vec::new();
@@ -112,17 +201,18 @@ impl ProudNetHandler {
         payload.push(0x04);
 
         // Settings (10 x u32 = 40 bytes)
-        // These values are from the captured frame 1946
-        payload.extend_from_slice(&0x00000000u32.to_le_bytes()); // Flags
-        payload.extend_from_slice(&0x01000000u32.to_le_bytes()); // Version
-        payload.extend_from_slice(&0x27c00001u32.to_le_bytes()); // Settings
-        payload.extend_from_slice(&0x00010009u32.to_le_bytes());
-        payload.extend_from_slice(&0x0000003cu32.to_le_bytes());
-        payload.extend_from_slice(&0x00000080u32.to_le_bytes());
-        payload.extend_from_slice(&0x00000200u32.to_le_bytes());
-        payload.extend_from_slice(&0x00000001u32.to_le_bytes());
-        payload.extend_from_slice(&0x00000001u32.to_le_bytes());
-        payload.extend_from_slice(&0x02000000u32.to_le_bytes());
+        // Use the settings from this handler instance
+        let s = &self.settings;
+        payload.extend_from_slice(&s.flags.to_le_bytes());
+        payload.extend_from_slice(&s.version.to_le_bytes());
+        payload.extend_from_slice(&s.unknown1.to_le_bytes());
+        payload.extend_from_slice(&s.unknown2.to_le_bytes());
+        payload.extend_from_slice(&s.timeout_secs.to_le_bytes());
+        payload.extend_from_slice(&s.aes_key_bits.to_le_bytes());
+        payload.extend_from_slice(&s.fast_encrypt_key_bits.to_le_bytes());
+        payload.extend_from_slice(&s.unknown_flag1.to_le_bytes());
+        payload.extend_from_slice(&s.unknown_flag2.to_le_bytes());
+        payload.extend_from_slice(&s.unknown3.to_le_bytes());
 
         // Get RSA public key in DER format
         let public_key = self
