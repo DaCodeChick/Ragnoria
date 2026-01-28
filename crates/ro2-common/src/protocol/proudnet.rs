@@ -36,7 +36,6 @@ use anyhow::{anyhow, Result};
 #[cfg(feature = "server")]
 use rsa::pkcs1::EncodeRsaPublicKey;
 #[cfg(feature = "server")]
-#[cfg(feature = "server")]
 use std::net::SocketAddr;
 
 #[cfg(feature = "server")]
