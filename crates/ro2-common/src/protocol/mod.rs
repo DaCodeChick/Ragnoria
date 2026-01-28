@@ -78,3 +78,10 @@ pub trait ProudNetPacket: Sized {
 }
 
 pub mod rmi;
+pub mod handler;
+pub mod dispatcher;
+
+pub use handler::{
+    GameMessageHandler, GameContext, ConnectionInfo, HandlerRegistry, BoxedHandler,
+};
+pub use dispatcher::{MessageDispatcher, DispatcherStats};

@@ -1,4 +1,12 @@
-//! World server message handlers (minimal PoC)
+//! World server message handlers
+//!
+//! Handlers for game messages based on reverse engineering of Rag2.exe.
+//! Each handler implements the GameMessageHandler trait and processes
+//! specific message opcodes.
+
+pub mod system;
+
+pub use system::SystemMessageHandler;
 
 use anyhow::Result;
 

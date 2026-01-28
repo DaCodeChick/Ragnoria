@@ -1427,6 +1427,7 @@ version = "0.1.0"
 dependencies = [
  "aes",
  "anyhow",
+ "async-trait",
  "bcrypt",
  "bytes",
  "chrono",
@@ -1475,6 +1476,7 @@ name = "ro2-world"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "config",
  "dotenvy",
  "ro2-common",
