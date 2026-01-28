@@ -132,6 +132,86 @@
   - Find encryption functions: Search for AES/RSA imports
   - Analyze control flow: Understand message dispatching
 
+### Critical Ghidra Analysis Guidelines
+
+**MANDATORY NAMING CONVENTION:**
+
+When analyzing the client in Ghidra, you **MUST** rename every symbol for clarity:
+
+1. **Functions** - Rename from `FUN_00401234` to descriptive names
+   - Use purpose-based names: `Initialize_ProudNet`, `Handle_ReqLogin`, `Parse_PacketHeader`
+   - Follow PascalCase for client function names (matching C++ style)
+   - Example: `FUN_00405678` → `Connect_To_LoginServer`
+
+2. **Function Parameters** - Rename from `param_1`, `param_2`, etc.
+   - Use descriptive names: `socket`, `buffer`, `packet_length`, `message_id`
+   - Follow snake_case for parameter names
+   - Example: `param_1` → `tcp_socket`, `param_2` → `packet_buffer`
+
+3. **Global Variables** - Rename from `DAT_00601234`
+   - Use SCREAMING_SNAKE_CASE for globals
+   - Include type/purpose hints: `G_CLIENT_VERSION`, `G_SESSION_KEY`, `G_PROUDNET_INSTANCE`
+   - Example: `DAT_00603040` → `G_NETWORK_MANAGER`
+
+4. **Local Variables** - Rename from `local_8`, `local_10`, etc.
+   - Use descriptive camelCase or snake_case
+   - Example: `local_8` → `messageId`, `local_10` → `packetSize`
+
+5. **Structures** - Define and name custom types
+   - Use TitleCase for structure names
+   - Example: Create `PacketHeader` type, apply to memory regions
+
+**Analysis Workflow:**
+
+1. **Start at WinMain** - Always begin analysis from the entry point
+2. **Traverse Call Graph** - Follow function calls depth-first
+3. **Rename As You Go** - Don't leave unnamed symbols behind
+4. **Document in Comments** - Add Ghidra comments explaining logic
+5. **Export Findings** - Document in `docs/ghidra-findings/` (organized by topic)
+
+**Example Ghidra Session:**
+
+```
+1. Find WinMain (entry point)
+   - Rename: "WinMain" if not already named
+   
+2. Identify initialization sequence
+   - Find ProudNet init → Rename: "Initialize_ProudNetClient"
+   - Find network setup → Rename: "Setup_NetworkSockets"
+   
+3. Find message handlers
+   - Locate dispatch table → Rename: "G_MESSAGE_DISPATCH_TABLE"
+   - Each handler → Rename: "Handle_ReqLogin", "Handle_AnsServerStatus", etc.
+   
+4. Extract structures
+   - Create types: PacketHeader, NetworkPacket, CompletePacket
+   - Apply to all instances in binary
+   
+5. Find global state
+   - Session key storage → "G_SESSION_KEY_BUFFER"
+   - Server address → "G_LOGIN_SERVER_ADDRESS"
+```
+
+**Naming Patterns:**
+
+| Symbol Type | Pattern | Example |
+|-------------|---------|---------|
+| Functions | `Verb_Noun` | `Parse_LoginRequest`, `Send_PacketToServer` |
+| Methods | `Class_Method` | `ProudNet_Initialize`, `Socket_Connect` |
+| Parameters | `snake_case` | `packet_buffer`, `socket_handle`, `message_id` |
+| Locals | `camelCase` | `bytesRead`, `isConnected`, `packetType` |
+| Globals | `G_SCREAMING_SNAKE` | `G_CLIENT_VERSION`, `G_NETWORK_STATE` |
+| Constants | `SCREAMING_SNAKE` | `MAX_PACKET_SIZE`, `LOGIN_SERVER_PORT` |
+| Structures | `PascalCase` | `PacketHeader`, `SessionInfo`, `PlayerData` |
+
+**Why This Matters:**
+
+- Makes code review easier when collaborating
+- Allows AI to understand context without re-analysis
+- Creates exportable documentation
+- Facilitates sharing findings with community
+- Makes future updates faster (no re-discovering symbols)
+
 **Workflow:**
 1. Hypothesize protocol feature from game behavior
 2. Search Ghidra for related strings/structures
