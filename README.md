@@ -12,16 +12,22 @@ A proof-of-concept server emulator for Ragnarok Online 2, built in Rust for educ
 - ✅ Ghidra reverse engineering analysis
 - ✅ Packet structure definitions
 - ✅ Basic server scaffolding (Login, Lobby, World)
+- ✅ ProudNet encryption (RSA-1024 + AES-128 ECB)
+- ✅ Packet capture analysis (PCAP decryption)
+- ✅ Test server with working encryption handshake
+- ✅ Custom launcher GUI (iced framework)
+- ✅ Feature flags (client/server separation)
 
 ### In Progress
-- 🔄 Login server authentication flow
-- 🔄 Database schema and migrations
-- 🔄 Packet capture and analysis
+- 🔄 Real client testing with custom launcher
+- 🔄 Parameter format discovery for Rag2.exe
+- 🔄 Game protocol handlers (post-encryption)
 
 ### Planned
+- ⏳ Login server authentication flow
+- ⏳ Database schema and migrations
 - ⏳ Lobby server channel management
-- ⏳ AES/RSA encryption implementation
-- ⏳ Real client testing and validation
+- ⏳ Character system and world server
 
 ## Architecture
 
@@ -69,6 +75,7 @@ ragnoria/
 ├── docs/
 │   ├── protocol/
 │   │   ├── RFC-RO2-PROTOCOL.md   # RFC-style protocol spec
+│   │   ├── PACKET-CAPTURE-ANALYSIS.md # PCAP analysis
 │   │   └── appendices/
 │   │       └── message-catalog.md # Complete message list
 │   └── ghidra-findings.md        # Reverse engineering notes
@@ -81,7 +88,12 @@ ragnoria/
 │   │   │   └── database/         # Models & queries
 │   ├── ro2-login/                # Login server (port 7101)
 │   ├── ro2-lobby/                # Lobby server (port 7201)
-│   └── ro2-world/                # World server (port 7401)
+│   ├── ro2-world/                # World server (port 7401)
+│   ├── packet-analyzer/          # PCAP tools & test server
+│   │   └── src/bin/
+│   │       ├── test_server.rs    # ProudNet test server
+│   │       └── pcap_decrypt.rs   # PCAP decryption tool
+│   └── launcher/                 # Custom game launcher GUI
 ├── migrations/                   # Database migrations
 └── Cargo.toml                    # Workspace configuration
 ```
@@ -95,14 +107,37 @@ cargo build --workspace
 # Build release version
 cargo build --workspace --release
 
-# Run login server
-cargo run -p ro2-login
+# Build individual components
+cargo build -p ro2-login
+cargo build --bin test_server
+cargo build --bin launcher
 
 # Run with debug logging
 RUST_LOG=debug cargo run -p ro2-login
 ```
 
 ## Running
+
+### Testing with Real Client
+
+1. **Start the test server:**
+   ```bash
+   cargo run --bin test_server
+   ```
+   Server listens on `0.0.0.0:7101` with ProudNet encryption enabled
+
+2. **Launch the custom launcher:**
+   ```bash
+   cargo run --bin launcher
+   ```
+   
+3. **Configure and launch:**
+   - Enter server IP: `127.0.0.1`
+   - Enter server port: `7101`
+   - Browse to your RO2 game path (e.g., `/path/to/SHIPPING/Rag2.exe`)
+   - Click "Launch Game"
+
+### Running Production Servers
 
 Each server runs independently:
 

@@ -1,0 +1,14 @@
+[package]
+name = "launcher"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+iced = { version = "0.13", features = ["tokio"] }
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+anyhow = "1.0"
+dirs = "5.0"
