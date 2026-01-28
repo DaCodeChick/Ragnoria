@@ -229,6 +229,38 @@ impl ProudNetCrypto {
         // Try to decrypt with AES ECB
         self.decrypt_aes_ecb(encrypted_data)
     }
+
+    // ===== Client-side Convenience Methods =====
+    // These are aliases for clearer client code when experimenting with client implementations
+
+    #[cfg(feature = "client")]
+    /// Set server public key from DER (client-side)
+    /// Alias for set_rsa_public_key_from_der for clearer client code
+    pub fn set_server_public_key(&mut self, der_data: &[u8]) -> Result<()> {
+        self.set_rsa_public_key_from_der(der_data)
+    }
+
+    #[cfg(feature = "client")]
+    /// Encrypt session key (client-side)
+    /// Alias for encrypt_session_key_rsa for clearer client code
+    pub fn encrypt_session_key(&self, session_key: &[u8]) -> Result<Vec<u8>> {
+        self.encrypt_session_key_rsa(session_key)
+    }
+
+    #[cfg(feature = "client")]
+    /// Set session key (client-side)
+    /// Alias for set_aes_session_key for clearer client code
+    pub fn set_session_key(&mut self, key: [u8; 16]) -> Result<()> {
+        self.set_aes_session_key(key);
+        Ok(())
+    }
+
+    #[cfg(feature = "client")]
+    /// Encrypt data for sending (client-side)
+    /// Alias for encrypt_aes_ecb for clearer client code
+    pub fn encrypt_data(&self, data: &[u8]) -> Result<Vec<u8>> {
+        self.encrypt_aes_ecb(data)
+    }
 }
 
 impl Default for ProudNetCrypto {

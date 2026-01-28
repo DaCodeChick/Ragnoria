@@ -28,3 +28,4 @@ bcrypt = { workspace = true }
 default = ["sqlite"]
 sqlite = ["sqlx/sqlite"]
 mysql = ["sqlx/mysql"]
+client = []
