@@ -277,39 +277,38 @@ impl Launcher {
 
         // Based on Ghidra analysis of Rag2.exe:
         // CRITICAL DISCOVERIES:
-        // 1. ValidateGameLaunchParameters() checks for "-FromLauncher" flag (hyphen, not slash)
-        // 2. ParseGameLaunchArguments() tokenizes command line by " /" (space and forward slash)
-        // 3. Parameters are parsed as key=value pairs: /KEY=VALUE
-        // 4. GetGameServerIPFromCommandLine() looks for "IP" key in g_LaunchParametersMap
+        // 1. ParseGameLaunchArguments() tokenizes command line by " /" (space and slash)
+        // 2. Each token split by "=" becomes key-value pair in g_LaunchParametersMap
+        // 3. ValidateGameLaunchParameters() calls FUN_00a4f9e0() which:
+        //    - Looks for "FROM" key in map
+        //    - Compares value to "-FromLauncher" string at 0x13dfc50
+        // 4. GetGameServerIPFromCommandLine() looks for "IP" key
         //
-        // Decompiled ParseGameLaunchArguments:
-        //   TokenizeStringByDelimiters(&tokens, commandLine, " /");
-        //   For each token:
-        //     TokenizeStringByDelimiters(&kv, token, "=");
-        //     if (kv.count == 2) map.insert(kv[0], kv[1]);
+        // Validation logic:
+        //   value = g_LaunchParametersMap["FROM"]
+        //   if (strcmp(value, "-FromLauncher") == 0) SUCCESS
         //
-        // SOLUTION: Use -FromLauncher (hyphen) + /IP=x.x.x.x (slash for parameter)
+        // CORRECT FORMAT: /FROM=-FromLauncher /IP=127.0.0.1
         
         let commands_to_try = vec![
-            // Option 0: -FromLauncher + /IP=x.x.x.x (CORRECT FORMAT from Ghidra)
+            // Option 0: /FROM=-FromLauncher /IP=x.x.x.x (CORRECT from Ghidra)
             vec![
-                String::from("-FromLauncher"),
+                String::from("/FROM=-FromLauncher"),
                 format!("/IP={}", self.server_ip),
             ],
             
-            // Option 1: Just -FromLauncher flag (for testing - may use default server)
+            // Option 1: Just /FROM=-FromLauncher (may use default/hosts server)
             vec![
-                String::from("-FromLauncher"),
+                String::from("/FROM=-FromLauncher"),
             ],
             
-            // Option 2: NO parameters (ERROR TEST - will show Updater error)
+            // Option 2: NO parameters (ERROR TEST - shows Updater error)
             vec![],
         ];
 
-        // Use Option 0 by default (-FromLauncher + /IP=x.x.x.x)
-        // You can change this to test different parameter combinations:
-        // 0 = -FromLauncher /IP=x.x.x.x (CORRECT - default)
-        // 1 = -FromLauncher only (may use default/hosts file)
+        // Use Option 0 by default (/FROM=-FromLauncher /IP=x.x.x.x)
+        // 0 = /FROM=-FromLauncher /IP=x.x.x.x (CORRECT - default)
+        // 1 = /FROM=-FromLauncher only (may use default/hosts file)
         // 2 = No parameters (ERROR TEST - shows Updater error)
         let option_index = std::env::var("LAUNCH_OPTION")
             .ok()
@@ -321,8 +320,8 @@ impl Launcher {
         println!("Using launch option {}: {:?}", option_index, args);
         println!();
         println!("To try different options, set LAUNCH_OPTION environment variable:");
-        println!("  LAUNCH_OPTION=0  - -FromLauncher /IP=x.x.x.x (CORRECT - default)");
-        println!("  LAUNCH_OPTION=1  - -FromLauncher only");
+        println!("  LAUNCH_OPTION=0  - /FROM=-FromLauncher /IP=x.x.x.x (CORRECT - default)");
+        println!("  LAUNCH_OPTION=1  - /FROM=-FromLauncher only");
         println!("  LAUNCH_OPTION=2  - No parameters (ERROR TEST)");
         println!();
 
