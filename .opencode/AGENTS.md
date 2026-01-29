@@ -331,8 +331,10 @@ When you see messy code from discovery/debugging:
 - Remove commented-out code
 - Consolidate duplicate logic
 - Make code production-ready
+- **Split up large monolithic files** - Break files >500 lines into smaller, focused modules
 - **DO NOT** add research artifacts (PCAP frame numbers, Ghidra addresses, raw analysis notes)
 - **DO NOT** over-document implementation details that would clutter the codebase for others
+- **DO NOT** hardcode absolute paths (like WINE paths) - use configuration or environment variables
 - Keep comments focused on "why" not "what" or "how we discovered this"
 - Remove experimental/diagnostic code that served its purpose during discovery
 
