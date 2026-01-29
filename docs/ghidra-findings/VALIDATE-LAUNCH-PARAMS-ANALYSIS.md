@@ -69,7 +69,9 @@ LAB_00a50215:
   strcpy_s(local_210, 0x104, "Updater");
   FUN_00518fa0(local_10c, s__s___013dfcc4, local_210);
   
-  // Display first error dialog (Korean text about Updater)
+  // Display first error dialog
+  // Korean: "Updater를 통해 다시 실행 하겠습니다."
+  // English: "It will be run again through the Updater."
   if (PTR_FUN_015a5244 != (undefined *)0x0) {
     (*(code *)PTR_FUN_015a5244)(local_10c, "ERROR", 0);
   }
@@ -79,6 +81,8 @@ LAB_00a50215:
   cVar2 = FUN_00a4b390(local_10c);  // File exists check
   
   // If Updater.exe doesn't exist, show second error
+  // Korean: "Updater.exe 파일이 존재하지 않습니다."
+  // English: "The Updater.exe file does not exist."
   if (cVar2 == '\0') {
     FUN_00518fa0(local_10c, s__s_exe___013dfc98, local_210);
     if (PTR_FUN_015a5244 != (undefined *)0x0) {
@@ -138,17 +142,43 @@ LAB_00a50215:
 
 **String at 0x013dfce4:** "Updater"
 
-**Korean Error Format at 0x013dfcc4:**  
+**First Error Dialog at 0x013dfcc4:**  
 ```
-%s를 통해서만 실행할 수 있습니다.
-Translation: "Can only be executed through %s"
+Korean: Updater를 통해 다시 실행 하겠습니다.
+English: "It will be run again through the Updater."
+Garbled display: "Updater를 통해 다시 실행 하겠습니다." (EUC-KR interpreted as Windows-1252)
 ```
 
-**Second Error Format at 0x013dfc98:**  
+**Second Error Dialog at 0x013dfc98:**  
 ```
-%s.exe 파일이 존재하지 않습니다.
-Translation: "%s.exe file does not exist"
+Korean: Updater.exe 파일이 존재하지 않습니다.
+English: "The Updater.exe file does not exist."
+Garbled display: "Updater.exe파일이 존재하지 않습니다." (EUC-KR interpreted as Windows-1252)
 ```
+
+**Note:** Error text appears garbled on non-Korean Windows systems because the game uses EUC-KR encoding but the system interprets it as Windows-1252/CP1252.
+
+### Error Dialog Screenshots
+
+When launching without `-FromLauncher` flag, users see two sequential error dialogs:
+
+**Dialog 1 (Screenshot 2026-01-28 154714.png):**
+```
+Title: ERROR
+Garbled Text: Updater를 통해 다시 실행 하겠습니다.
+Actual Korean: Updater를 통해 다시 실행 하겠습니다.
+English: "It will be run again through the Updater."
+```
+
+**Dialog 2 (Screenshot 2026-01-28 154728.png):**
+```
+Title: Error
+Garbled Text: Updater.exe파일이 존재하지 않습니다.
+Actual Korean: Updater.exe 파일이 존재하지 않습니다.
+English: "The Updater.exe file does not exist."
+```
+
+Both dialogs are **misleading** - the real issue is not a missing Updater.exe file, but the missing `-FromLauncher` command-line flag!
 
 ## String References
 
@@ -196,10 +226,13 @@ Rag2.exe -FromLauncher /IP=127.0.0.1 /PORT=7101
 ## Notes
 
 1. **No Updater.exe exists** in RO2 installation - the check is legacy/deprecated
-2. **Error text is Korean** - appears garbled in non-Korean systems
+2. **Error text is Korean (EUC-KR encoding)** - appears garbled on non-Korean Windows systems:
+   - First error: "Updater를 통해 다시 실행 하겠습니다." appears as "Updater를 통해 다시 실행 하겠습니다."
+   - Second error: "Updater.exe 파일이 존재하지 않습니다." appears as "Updater.exe파일이 존재하지 않습니다."
 3. **String comparison is case-sensitive** - must be exactly `-FromLauncher`
 4. **Dash prefix is required** - not slash (`-FromLauncher` not `/FromLauncher`)
 5. **RO2Client.exe uses `-FromUpdater`** - but Rag2.exe checks for `-FromLauncher`!
+6. **Error messages are misleading** - they don't indicate the real problem (missing flag)
 
 ## Related Functions
 
