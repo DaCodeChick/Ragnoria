@@ -41,21 +41,49 @@ Example game path:
 
 ## How It Works
 
-The launcher passes command-line parameters to Rag2.exe based on reverse engineering of RO2Client.exe:
+### Critical Discovery: The `-FromLauncher` Flag
 
-```bash
-Rag2.exe /FROM=-Ragnoria /STARTER=2 /IP=127.0.0.1 /PORT=7101
+Through Ghidra reverse engineering, we discovered that **Rag2.exe REQUIRES the `-FromLauncher` flag** in the command line:
+
+```c
+// Decompiled from ValidateGameLaunchParameters() at 0x00a501d0
+if (!strcmp(commandLine, "-FromLauncher")) {
+    return; // Success! Continue to game initialization
+}
+
+// If -FromLauncher is NOT found:
+// 1. Show Korean error: "Updater를 통해서만 실행할 수 있습니다."
+//    (Translation: "Can only be executed through Updater")
+// 2. Check for ../Updater.exe file
+// 3. Show second error if Updater.exe doesn't exist
 ```
 
-### Parameter Formats Tested
+**Without this flag, the game shows error dialogs and refuses to launch!**
 
-The launcher currently tests these parameter formats (in order):
+### Launch Parameters
 
-1. **Option 1** (Default): `/FROM=-Ragnoria /STARTER=2 /IP=x.x.x.x /PORT=xxxx`
-2. **Option 2**: `/FROM=-Ragnoria /STARTER=2 /SERVER=x.x.x.x:xxxx`
-3. **Option 3**: `/FROM=-Ragnoria /STARTER=2 /LOGINSERVER=x.x.x.x:xxxx`
+The launcher passes these parameters to Rag2.exe:
 
-> **Note**: The exact parameter format accepted by Rag2.exe needs to be verified through testing. Option 1 is based on RO2Client.exe analysis.
+```bash
+Rag2.exe -FromLauncher [optional: IP PORT or /IP=x.x.x.x /PORT=xxxx]
+```
+
+### Parameter Options
+
+The launcher supports multiple parameter formats via `LAUNCH_OPTION` environment variable:
+
+| Option | Parameters | Description |
+|--------|-----------|-------------|
+| **0** (default) | `-FromLauncher` | Just the required flag (RECOMMENDED) |
+| 1 | `-FromLauncher IP PORT` | With server IP and port |
+| 2 | `-FromLauncher /IP=x.x.x.x /PORT=xxxx` | With named parameters |
+| 3 | `-FromLauncher IP:PORT` | With combined address |
+| 4 | *(none)* | No parameters (ERROR TEST - shows Updater error) |
+
+To test different options:
+```bash
+LAUNCH_OPTION=1 cargo run --bin launcher
+```
 
 ## Configuration File
 
@@ -90,13 +118,25 @@ cargo run --bin launcher
 
 ## Troubleshooting
 
+### "Updater" Error Dialogs (Korean Text)
+
+If you see error dialogs with garbled Korean text about "Updater":
+- **Cause**: The `-FromLauncher` flag is missing from command line
+- **Solution**: Use the launcher (it includes this flag automatically) or add `-FromLauncher` manually
+
 ### "Game executable not found"
 
 Verify the game path points to `Rag2.exe` in the `SHIPPING` folder, not `RO2Client.exe` or `Launcher2.exe`.
 
 ### Game doesn't connect
 
-The parameter format may need adjustment. Check the launcher output and test server logs to see if the client attempts to connect.
+The parameter format may need adjustment. Try different `LAUNCH_OPTION` values (see above).
+
+### Missing DLL Errors
+
+The launcher sets the working directory to the game root (parent of SHIPPING) where all DLLs are located. If you still get DLL errors:
+- Verify your game installation is complete
+- Check that DLLs exist in the root game directory
 
 ### Blank window on Linux
 

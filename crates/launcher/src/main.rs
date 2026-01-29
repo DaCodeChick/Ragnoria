@@ -269,56 +269,62 @@ impl Launcher {
         println!("NOTE: Based on Ghidra analysis, the game calls:");
         println!("  - ParseGameLaunchArguments() to parse command line");
         println!("  - GetGameServerIPFromCommandLine() to extract server IP");
-        println!("  - ValidateGameLaunchParameters() to validate params");
-        println!("We're bypassing Updater.exe entirely by passing server IP directly.");
+        println!("  - ValidateGameLaunchParameters() to check for '-FromLauncher' flag");
+        println!();
+        println!("CRITICAL: Game REQUIRES '-FromLauncher' flag in command line!");
+        println!("Without it, shows Korean error dialogs about Updater.exe");
         println!();
 
         // Based on Ghidra analysis of Rag2.exe:
-        // The game calls GetGameServerIPFromCommandLine() which extracts server IP
-        // from command-line parameters.
+        // CRITICAL DISCOVERY: ValidateGameLaunchParameters() checks for "-FromLauncher" flag!
+        // If this flag is NOT present, the game shows two error dialogs:
+        //   1. Korean error about "Updater" needing to launch the game
+        //   2. Check for ../Updater.exe and shows error if not found
+        //
+        // The decompiled code shows:
+        //   if (!strcmp(commandLine, "-FromLauncher")) return; // Success!
+        //   else show_error("Updater") and check for ../Updater.exe
+        //
+        // SOLUTION: Always include "-FromLauncher" in command line!
         
-        // DISCOVERY: RO2Client.exe uses: /FROM=-FromUpdater /STARTER=2 [params]
-        // Note: -FromUpdater has a DASH, not a slash!
-        // Your installation has NO Updater.exe - error is likely Korean text encoding issue
-        
-        // Try different parameter formats
+        // Try different parameter formats (all include -FromLauncher)
         let commands_to_try = vec![
-            // Option 0: NO parameters (let game connect to default/hosts file)
-            vec![],
-            
-            // Option 1: Just server IP and port (simplest)
+            // Option 0: Just -FromLauncher flag (RECOMMENDED - Ghidra analysis)
             vec![
+                String::from("-FromLauncher"),
+            ],
+            
+            // Option 1: -FromLauncher + server IP and port
+            vec![
+                String::from("-FromLauncher"),
                 self.server_ip.clone(),
                 self.server_port.clone(),
             ],
             
-            // Option 2: RO2Client.exe format (exact match)
+            // Option 2: -FromLauncher + /IP and /PORT flags
             vec![
-                String::from("/FROM=-FromUpdater"),
-                String::from("/STARTER=2"),
-                self.server_ip.clone(),
-                self.server_port.clone(),
-            ],
-            
-            // Option 3: With /IP and /PORT flags
-            vec![
+                String::from("-FromLauncher"),
                 format!("/IP={}", self.server_ip),
                 format!("/PORT={}", self.server_port),
             ],
             
-            // Option 4: Combined format
+            // Option 3: -FromLauncher + combined IP:PORT
             vec![
+                String::from("-FromLauncher"),
                 format!("{}:{}", self.server_ip, self.server_port),
             ],
+            
+            // Option 4: NO parameters (will show Updater error!)
+            vec![],
         ];
 
-        // Try the first option by default (NO parameters - let game use defaults)
+        // Use Option 0 by default (just -FromLauncher flag)
         // You can change this to test different parameter combinations:
-        // 0 = No parameters (game uses defaults/hosts file)
-        // 1 = IP PORT (simplest, direct args)
-        // 2 = /FROM=-FromUpdater /STARTER=2 IP PORT (RO2Client format)
-        // 3 = /IP=x.x.x.x /PORT=xxxx
-        // 4 = IP:PORT (combined)
+        // 0 = -FromLauncher only (RECOMMENDED - bypasses Updater check)
+        // 1 = -FromLauncher + IP PORT
+        // 2 = -FromLauncher + /IP=x.x.x.x /PORT=xxxx
+        // 3 = -FromLauncher + IP:PORT combined
+        // 4 = No parameters (will show Updater error for testing)
         let option_index = std::env::var("LAUNCH_OPTION")
             .ok()
             .and_then(|s| s.parse::<usize>().ok())
@@ -329,11 +335,11 @@ impl Launcher {
         println!("Using launch option {}: {:?}", option_index, args);
         println!();
         println!("To try different options, set LAUNCH_OPTION environment variable:");
-        println!("  LAUNCH_OPTION=0  - No parameters (default, use hosts file)");
-        println!("  LAUNCH_OPTION=1  - IP PORT (simplest)");
-        println!("  LAUNCH_OPTION=2  - /FROM=-FromUpdater /STARTER=2 IP PORT");
-        println!("  LAUNCH_OPTION=3  - /IP=x.x.x.x /PORT=xxxx");
-        println!("  LAUNCH_OPTION=4  - IP:PORT combined");
+        println!("  LAUNCH_OPTION=0  - -FromLauncher only (RECOMMENDED - default)");
+        println!("  LAUNCH_OPTION=1  - -FromLauncher + IP PORT");
+        println!("  LAUNCH_OPTION=2  - -FromLauncher + /IP=x.x.x.x /PORT=xxxx");
+        println!("  LAUNCH_OPTION=3  - -FromLauncher + IP:PORT combined");
+        println!("  LAUNCH_OPTION=4  - No parameters (ERROR TEST - will show Updater error)");
         println!();
 
         #[cfg(target_os = "windows")]
