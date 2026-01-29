@@ -275,46 +275,50 @@ impl Launcher {
 
         // Based on Ghidra analysis of Rag2.exe:
         // The game calls GetGameServerIPFromCommandLine() which extracts server IP
-        // from command-line parameters. We don't need /FROM or Updater.exe at all!
-        // Based on Ghidra analysis of Rag2.exe:
-        // The game calls GetGameServerIPFromCommandLine() which extracts server IP
-        // from command-line parameters. We don't need /FROM or Updater.exe at all!
+        // from command-line parameters.
+        
+        // DISCOVERY: RO2Client.exe uses: /FROM=-FromUpdater /STARTER=2 [params]
+        // Note: -FromUpdater has a DASH, not a slash!
+        // Your installation has NO Updater.exe - error is likely Korean text encoding issue
         
         // Try different parameter formats
         let commands_to_try = vec![
-            // Option 0: Just server IP and port (simplest, no updater needed)
+            // Option 0: NO parameters (let game connect to default/hosts file)
+            vec![],
+            
+            // Option 1: Just server IP and port (simplest)
             vec![
                 self.server_ip.clone(),
                 self.server_port.clone(),
             ],
-            // Option 1: With /IP and /PORT flags
+            
+            // Option 2: RO2Client.exe format (exact match)
+            vec![
+                String::from("/FROM=-FromUpdater"),
+                String::from("/STARTER=2"),
+                self.server_ip.clone(),
+                self.server_port.clone(),
+            ],
+            
+            // Option 3: With /IP and /PORT flags
             vec![
                 format!("/IP={}", self.server_ip),
                 format!("/PORT={}", self.server_port),
             ],
-            // Option 2: Alternative format with equals
+            
+            // Option 4: Combined format
             vec![
-                format!("IP={}", self.server_ip),
-                format!("PORT={}", self.server_port),
-            ],
-            // Option 3: Combined server parameter
-            vec![
-                format!("{}:{}", self.server_ip, self.server_port),
-            ],
-            // Option 4: With -server flag (common in games)
-            vec![
-                String::from("-server"),
                 format!("{}:{}", self.server_ip, self.server_port),
             ],
         ];
 
-        // Try the first option by default (simplest: just IP and port)
+        // Try the first option by default (NO parameters - let game use defaults)
         // You can change this to test different parameter combinations:
-        // 0 = IP PORT (simplest, direct args)
-        // 1 = /IP=x.x.x.x /PORT=xxxx
-        // 2 = IP=x.x.x.x PORT=xxxx
-        // 3 = IP:PORT (combined)
-        // 4 = -server IP:PORT
+        // 0 = No parameters (game uses defaults/hosts file)
+        // 1 = IP PORT (simplest, direct args)
+        // 2 = /FROM=-FromUpdater /STARTER=2 IP PORT (RO2Client format)
+        // 3 = /IP=x.x.x.x /PORT=xxxx
+        // 4 = IP:PORT (combined)
         let option_index = std::env::var("LAUNCH_OPTION")
             .ok()
             .and_then(|s| s.parse::<usize>().ok())
@@ -325,11 +329,11 @@ impl Launcher {
         println!("Using launch option {}: {:?}", option_index, args);
         println!();
         println!("To try different options, set LAUNCH_OPTION environment variable:");
-        println!("  LAUNCH_OPTION=0  - IP PORT (default, simplest)");
-        println!("  LAUNCH_OPTION=1  - /IP=x.x.x.x /PORT=xxxx");
-        println!("  LAUNCH_OPTION=2  - IP=x.x.x.x PORT=xxxx");
-        println!("  LAUNCH_OPTION=3  - IP:PORT combined");
-        println!("  LAUNCH_OPTION=4  - -server IP:PORT");
+        println!("  LAUNCH_OPTION=0  - No parameters (default, use hosts file)");
+        println!("  LAUNCH_OPTION=1  - IP PORT (simplest)");
+        println!("  LAUNCH_OPTION=2  - /FROM=-FromUpdater /STARTER=2 IP PORT");
+        println!("  LAUNCH_OPTION=3  - /IP=x.x.x.x /PORT=xxxx");
+        println!("  LAUNCH_OPTION=4  - IP:PORT combined");
         println!();
 
         #[cfg(target_os = "windows")]
