@@ -36,6 +36,8 @@ use anyhow::{anyhow, Result};
 #[cfg(feature = "server")]
 use rsa::pkcs1::EncodeRsaPublicKey;
 #[cfg(feature = "server")]
+use rsa::traits::PublicKeyParts;
+#[cfg(feature = "server")]
 use std::net::SocketAddr;
 
 #[cfg(feature = "server")]
@@ -43,11 +45,8 @@ use std::net::SocketAddr;
 ///
 /// Sent in response to 0x2F policy request.
 /// **Important**: This response has NO ProudNet framing (no 0x5713 magic).
-/// The client expects raw XML data.
-pub const FLASH_POLICY_XML: &str = r#"<?xml version="1.0"?>
-<cross-domain-policy>
-<allow-access-from domain="*" to-ports="*" />
-</cross-domain-policy>"#;
+/// The client expects raw XML data with null terminator (110 bytes total).
+pub const FLASH_POLICY_XML: &[u8] = b"<?xml version=\"1.0\"?><cross-domain-policy><allow-access-from domain=\"*\" to-ports=\"*\" /></cross-domain-policy>\0";
 
 #[cfg(feature = "server")]
 /// ProudNet connection settings for 0x04 packet
@@ -163,6 +162,25 @@ impl ProudNetHandler {
         }
     }
 
+    /// Create a new ProudNet handler with a shared RSA keypair
+    ///
+    /// This allows multiple connections to share the same RSA keypair,
+    /// which is necessary for clients that cache server RSA keys.
+    pub fn with_shared_crypto(
+        remote_addr: SocketAddr,
+        settings: ProudNetSettings,
+        crypto: std::sync::Arc<ProudNetCrypto>,
+    ) -> Self {
+        Self {
+            crypto: (*crypto).clone(),
+            remote_addr,
+            session_id: None,
+            encryption_ready: false,
+            client_version: None,
+            settings,
+        }
+    }
+
     /// Handle ProudNet protocol message
     ///
     /// Returns response bytes (may or may not have ProudNet framing)
@@ -184,7 +202,7 @@ impl ProudNetHandler {
     ///
     /// **Important**: Returns raw XML without ProudNet framing!
     fn handle_policy_request(&self) -> Result<Option<Vec<u8>>> {
-        Ok(Some(FLASH_POLICY_XML.as_bytes().to_vec()))
+        Ok(Some(FLASH_POLICY_XML.to_vec()))
     }
 
     /// Build 0x04 - Encryption handshake (send RSA public key)
@@ -239,10 +257,34 @@ impl ProudNetHandler {
         // DER-encoded public key
         payload.extend_from_slice(der_bytes.as_bytes());
 
-        // Wrap in PacketFrame
-        let frame = PacketFrame::new(payload);
+        use rsa::traits::PublicKeyParts;
+        println!("[ProudNet] RSA public key DER length: {} bytes", der_len);
+        println!(
+            "[ProudNet] RSA modulus size: {} bits",
+            public_key.size() * 8
+        );
+        println!(
+            "[ProudNet] RSA public modulus (first 32 bytes): {}",
+            hex::encode(
+                &public_key.n().to_bytes_le()[..32.min(public_key.n().to_bytes_le().len())]
+            )
+        );
+        println!(
+            "[ProudNet] DER data (first 32 bytes): {}",
+            hex::encode(&der_bytes.as_bytes()[..32.min(der_bytes.as_bytes().len())])
+        );
 
-        Ok(frame.to_bytes())
+        // Manual framing to match capture format
+        // Capture uses 2-byte varint even though payload fits in 1 byte
+        let mut packet = Vec::new();
+        packet.extend_from_slice(&[0x13, 0x57]); // Magic
+        packet.push(0x02); // Size byte: 2-byte varint
+        packet.extend_from_slice(&(payload.len() as u16).to_le_bytes()); // Payload size as u16 LE
+        packet.extend_from_slice(&payload);
+
+        println!("[ProudNet] 0x04 packet total size: {} bytes", packet.len());
+
+        Ok(packet)
     }
 
     /// Handle 0x05 - Encryption response (client sends encrypted AES key)
@@ -256,41 +298,81 @@ impl ProudNetHandler {
     /// └─ Opcode
     /// ```
     fn handle_encryption_response(&mut self, payload: &[u8]) -> Result<Option<Vec<u8>>> {
+        println!("[ProudNet] 0x05 payload length: {} bytes", payload.len());
+
         if payload.len() < 5 {
-            return Err(anyhow!("0x05 payload too short"));
+            return Err(anyhow!("0x05 payload too short: {} bytes", payload.len()));
         }
 
         // Parse structure
         let opcode = payload[0]; // Should be 0x05
-        let sub_opcode = payload[1]; // Should be 0x02
+        let _sub_opcode = payload[1]; // Should be 0x02
         let key_len = u16::from_le_bytes([payload[2], payload[3]]) as usize;
+
+        println!(
+            "[ProudNet] 0x05 opcode: 0x{:02x}, sub_opcode: 0x{:02x}, key_len: {}",
+            opcode, _sub_opcode, key_len
+        );
 
         if opcode != 0x05 {
             return Err(anyhow!("Expected opcode 0x05, got 0x{:02x}", opcode));
         }
 
         if payload.len() < 4 + key_len {
-            return Err(anyhow!("0x05 payload truncated"));
+            return Err(anyhow!(
+                "0x05 payload truncated: have {} bytes, need {}",
+                payload.len(),
+                4 + key_len
+            ));
         }
 
         // Extract encrypted AES key
         let encrypted_key = &payload[4..4 + key_len];
-
-        // Decrypt the AES session key using our RSA private key
-        let session_key = self.crypto.decrypt_session_key_rsa(encrypted_key)?;
-
         println!(
-            "[ProudNet] Decrypted AES session key: {} bytes",
-            session_key.len()
+            "[ProudNet] Encrypted key length: {} bytes",
+            encrypted_key.len()
+        );
+        println!(
+            "[ProudNet] Encrypted key (first 32 bytes): {}",
+            hex::encode(&encrypted_key[..32.min(encrypted_key.len())])
         );
 
-        // Mark encryption as ready
-        self.encryption_ready = true;
+        // Check if there's additional data
+        if payload.len() > 4 + key_len {
+            let extra_bytes = payload.len() - 4 - key_len;
+            println!(
+                "[ProudNet] WARNING: {} extra bytes after encrypted key",
+                extra_bytes
+            );
+            println!(
+                "[ProudNet] Extra data: {}",
+                hex::encode(&payload[4 + key_len..])
+            );
+        }
 
-        // Send 0x06 (Ready) response
-        let response = PacketFrame::new(vec![0x06]);
+        // Decrypt the AES session key using our RSA private key
+        println!("[ProudNet] Attempting RSA decryption...");
+        match self.crypto.decrypt_session_key_rsa(encrypted_key) {
+            Ok(session_key) => {
+                println!(
+                    "[ProudNet] SUCCESS! Decrypted AES session key: {} bytes",
+                    session_key.len()
+                );
+                println!("[ProudNet] Session key: {}", hex::encode(&session_key));
 
-        Ok(Some(response.to_bytes()))
+                // Mark encryption as ready
+                self.encryption_ready = true;
+
+                // Send 0x06 (Ready) response
+                let response = PacketFrame::new(vec![0x06]);
+
+                Ok(Some(response.to_bytes()))
+            }
+            Err(e) => {
+                println!("[ProudNet] RSA decryption FAILED: {}", e);
+                Err(anyhow!("Failed to decrypt with RSA: {}", e))
+            }
+        }
     }
 
     /// Handle 0x07 - Version check
@@ -398,7 +480,9 @@ mod tests {
         let handler = ProudNetHandler::new("127.0.0.1:7101".parse().unwrap());
         let response = handler.handle_policy_request().unwrap().unwrap();
 
-        assert_eq!(response, FLASH_POLICY_XML.as_bytes());
+        assert_eq!(response, FLASH_POLICY_XML);
+        assert_eq!(response.len(), 110); // 109 bytes + null terminator
+        assert_eq!(response[response.len() - 1], 0); // Ends with null terminator
     }
 
     #[test]

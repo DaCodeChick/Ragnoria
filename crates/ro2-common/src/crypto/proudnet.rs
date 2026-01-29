@@ -16,11 +16,14 @@ use aes::cipher::{generic_array::GenericArray, BlockDecrypt, BlockEncrypt, KeyIn
 use aes::Aes128;
 use rand::{rngs::OsRng, Rng};
 use rsa::pkcs1::{DecodeRsaPublicKey, EncodeRsaPublicKey};
-use rsa::{Pkcs1v15Encrypt, RsaPrivateKey, RsaPublicKey};
+use rsa::{Oaep, Pkcs1v15Encrypt, RsaPrivateKey, RsaPublicKey};
+use sha1::Sha1;
+use sha2::Sha256;
 
 /// ProudNet encryption handler
 ///
 /// Manages RSA and AES encryption for the ProudNet protocol layer.
+#[derive(Clone)]
 pub struct ProudNetCrypto {
     /// RSA public key (received from server in 0x04 packet)
     rsa_public: Option<RsaPublicKey>,
@@ -127,20 +130,86 @@ impl ProudNetCrypto {
     #[cfg(feature = "server")]
     /// Decrypt session key with RSA (server-side, opcode 0x05)
     pub fn decrypt_session_key_rsa(&mut self, encrypted_key: &[u8]) -> Result<Vec<u8>> {
+        use rsa::traits::PublicKeyParts;
+
         let private_key = self
             .rsa_private
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("No RSA private key set"))?;
 
-        let decrypted = private_key
-            .decrypt(Pkcs1v15Encrypt, encrypted_key)
-            .map_err(|e| anyhow::anyhow!("Failed to decrypt with RSA: {}", e))?;
+        println!(
+            "[RSA] Decrypting {} bytes with {}-bit key",
+            encrypted_key.len(),
+            private_key.size() * 8
+        );
+        println!(
+            "[RSA] Private key modulus (first 32 bytes): {}",
+            hex::encode(
+                &private_key.n().to_bytes_le()[..32.min(private_key.n().to_bytes_le().len())]
+            )
+        );
+        println!(
+            "[RSA] Encrypted data (first 32 bytes): {}",
+            hex::encode(&encrypted_key[..32.min(encrypted_key.len())])
+        );
+
+        // Try PKCS#1 v1.5 first (most common)
+        let decrypted = match private_key.decrypt(Pkcs1v15Encrypt, encrypted_key) {
+            Ok(data) => {
+                println!("[RSA] ✓ Decrypted with PKCS#1 v1.5 padding");
+                data
+            }
+            Err(e1) => {
+                println!("[RSA] PKCS#1 v1.5 decryption failed: {}", e1);
+                println!("[RSA] Trying OAEP-SHA1 padding (common in 2011-era software)...");
+
+                // Try OAEP with SHA-1 (more common in older software like RO2)
+                match private_key.decrypt(Oaep::new::<Sha1>(), encrypted_key) {
+                    Ok(data) => {
+                        println!("[RSA] ✓ Decrypted with OAEP-SHA1 padding");
+                        data
+                    }
+                    Err(e2) => {
+                        println!("[RSA] OAEP-SHA1 decryption failed: {}", e2);
+                        println!("[RSA] Trying OAEP-SHA256 padding...");
+
+                        // Try OAEP with SHA-256 as fallback
+                        match private_key.decrypt(Oaep::new::<Sha256>(), encrypted_key) {
+                            Ok(data) => {
+                                println!("[RSA] ✓ Decrypted with OAEP-SHA256 padding");
+                                data
+                            }
+                            Err(e3) => {
+                                println!("[RSA] All decryption methods failed");
+                                println!("[RSA] This could mean:");
+                                println!("[RSA]   1. Client used a different RSA key than we sent");
+                                println!("[RSA]   2. Client is caching/hardcoding a server key");
+                                println!("[RSA]   3. Data is corrupted or in unexpected format");
+                                println!(
+                                    "[RSA]   4. Client uses a non-standard RSA padding scheme"
+                                );
+                                return Err(anyhow::anyhow!(
+                                    "Failed to decrypt with RSA (tried all padding schemes): {} / {} / {}",
+                                    e1,
+                                    e2,
+                                    e3
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        println!("[RSA] Successfully decrypted {} bytes", decrypted.len());
+        println!("[RSA] Decrypted data: {}", hex::encode(&decrypted));
 
         // Extract the 16-byte AES key
         if decrypted.len() >= 16 {
             let mut key = [0u8; 16];
             key.copy_from_slice(&decrypted[0..16]);
             self.aes_key = Some(key);
+            println!("[RSA] Extracted AES session key: {}", hex::encode(&key));
         }
 
         Ok(decrypted)
@@ -292,13 +361,34 @@ mod tests {
     #[test]
     #[cfg(feature = "server")]
     fn test_rsa_session_key_exchange() {
+        use rsa::traits::PublicKeyParts;
+
         // Server generates keypair
         let mut server = ProudNetCrypto::new();
         server.generate_rsa_keypair(1024).unwrap();
 
+        // Print DER structure
+        let der = server.rsa_public_key().unwrap().to_pkcs1_der().unwrap();
+        let der_bytes = der.as_bytes();
+        println!("\n=== Generated RSA-1024 Key ===");
+        println!("DER length: {} bytes", der_bytes.len());
+        println!("DER structure:");
+        println!("  [0]: 0x{:02x} (SEQUENCE tag)", der_bytes[0]);
+        println!("  [1]: 0x{:02x} (long-form length marker)", der_bytes[1]);
+        println!("  [2]: 0x{:02x} ({} bytes)", der_bytes[2], der_bytes[2]);
+        println!("  [3]: 0x{:02x} (INTEGER tag for modulus)", der_bytes[3]);
+        println!("  [4]: 0x{:02x} (long-form length marker)", der_bytes[4]);
+        println!("  [5]: 0x{:02x} ({} bytes)", der_bytes[5], der_bytes[5]);
+        println!("  [6]: 0x{:02x} (leading zero byte)", der_bytes[6]);
+        println!("\nDER (first 32 bytes): {}", hex::encode(&der_bytes[..32]));
+        println!(
+            "Modulus size: {} bits",
+            server.rsa_public_key().unwrap().size() * 8
+        );
+        println!("Exponent: 0x{:x}\n", server.rsa_public_key().unwrap().e());
+
         // Client receives public key and generates session key
         let mut client = ProudNetCrypto::new();
-        let der = server.rsa_public_key().unwrap().to_pkcs1_der().unwrap();
         client.set_rsa_public_key_from_der(der.as_bytes()).unwrap();
 
         let session_key = client.generate_aes_session_key();
@@ -332,4 +422,99 @@ mod tests {
             assert_eq!(encrypted.len() % 16, 0);
         }
     }
+
+    #[test]
+    #[cfg(feature = "server")]
+    fn test_rsa_decrypt_raw_data() {
+        use rsa::traits::PublicKeyParts;
+
+        // Create a keypair
+        let mut server = ProudNetCrypto::new();
+        server.generate_rsa_keypair(1024).unwrap();
+
+        // Get the keys
+        let public_key = server.rsa_public_key().unwrap();
+        let private_key = server.rsa_private.as_ref().unwrap();
+
+        println!("\n=== RSA Raw Encrypt/Decrypt Test ===");
+        println!(
+            "Public key modulus (hex): {}",
+            hex::encode(public_key.n().to_bytes_be())
+        );
+        println!("Public key exponent: {}", public_key.e());
+
+        // Test data (16 bytes like AES key)
+        let test_data = b"0123456789ABCDEF";
+        println!("\nOriginal data: {}", hex::encode(test_data));
+
+        // Encrypt
+        let mut rng = rand::rngs::OsRng;
+        let encrypted = public_key
+            .encrypt(&mut rng, Pkcs1v15Encrypt, test_data)
+            .unwrap();
+        println!(
+            "Encrypted ({} bytes): {}",
+            encrypted.len(),
+            hex::encode(&encrypted)
+        );
+
+        // Decrypt
+        let decrypted = private_key.decrypt(Pkcs1v15Encrypt, &encrypted).unwrap();
+        println!("Decrypted: {}", hex::encode(&decrypted));
+
+        assert_eq!(test_data, &decrypted[..]);
+        println!("✓ Test passed!");
+    }
+}
+
+#[test]
+#[cfg(feature = "server")]
+fn test_rsa_keypair_consistency() {
+    use rsa::traits::PublicKeyParts;
+
+    println!("\n=== RSA Keypair Consistency Test ===");
+
+    // Generate a keypair
+    let mut crypto = ProudNetCrypto::new();
+    crypto.generate_rsa_keypair(1024).unwrap();
+
+    // Get the keys
+    let public_key = crypto.rsa_public_key().unwrap();
+    let private_key = crypto.rsa_private.as_ref().unwrap();
+
+    // Verify modulus matches
+    let pub_n = public_key.n();
+    let priv_n = private_key.n();
+
+    println!("Public key modulus:  {}", hex::encode(pub_n.to_bytes_be()));
+    println!("Private key modulus: {}", hex::encode(priv_n.to_bytes_be()));
+
+    assert_eq!(
+        pub_n, priv_n,
+        "Modulus mismatch between public and private key!"
+    );
+    println!("✓ Moduli match!");
+
+    // Verify exponents
+    println!("Public exponent: {}", public_key.e());
+    println!("Private exponent (d): <hidden>");
+
+    // Now test encrypt/decrypt cycle
+    let test_data = b"Test session key";
+    let mut rng = rand::rngs::OsRng;
+
+    let encrypted = public_key
+        .encrypt(&mut rng, Pkcs1v15Encrypt, test_data)
+        .unwrap();
+    println!(
+        "\nEncrypted {} bytes to {} bytes",
+        test_data.len(),
+        encrypted.len()
+    );
+
+    let decrypted = private_key.decrypt(Pkcs1v15Encrypt, &encrypted).unwrap();
+    println!("Decrypted back to {} bytes", decrypted.len());
+
+    assert_eq!(test_data, &decrypted[..], "Decryption mismatch!");
+    println!("✓ Encrypt/decrypt cycle works!");
 }

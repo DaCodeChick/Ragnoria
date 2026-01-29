@@ -75,27 +75,6 @@ impl ClientConnection {
     /// Process buffered data and parse packets
     async fn process_buffer(&mut self) -> Result<()> {
         loop {
-            // Check for policy request (starts with '<')
-            if self.buffer.starts_with(b"<policy-file-request/>") {
-                println!("\n[0x2F] Flash policy request detected");
-                self.buffer.drain(..23); // Remove policy request
-                
-                // Send XML policy (no ProudNet framing)
-                if let Some(response) = self.handler.handle(0x2F, &[])? {
-                    println!("[0x2F] Sending XML policy ({} bytes, NO framing)", response.len());
-                    self.stream.write_all(&response).await?;
-                    self.stream.flush().await?;
-                    
-                    // Now send 0x04 encryption handshake
-                    println!("\n[0x04] Sending encryption handshake");
-                    let handshake = self.handler.build_encryption_handshake()?;
-                    self.hexdump("0x04 packet", &handshake);
-                    self.stream.write_all(&handshake).await?;
-                    self.stream.flush().await?;
-                }
-                continue;
-            }
-
             // Try to parse ProudNet packet
             if self.buffer.len() < 4 {
                 // Need at least magic + size byte
@@ -146,6 +125,22 @@ impl ClientConnection {
 
         // Handle based on opcode
         match opcode {
+            0x2F => {
+                println!("[0x2F] Policy request (ProudNet framed)");
+                if let Some(response) = self.handler.handle(0x2F, &packet.payload)? {
+                    println!("[0x2F] Sending XML policy ({} bytes, NO framing)", response.len());
+                    self.stream.write_all(&response).await?;
+                    self.stream.flush().await?;
+                    
+                    // Now send 0x04 encryption handshake
+                    println!("\n[0x04] Sending encryption handshake");
+                    let handshake = self.handler.build_encryption_handshake()?;
+                    self.hexdump("0x04 packet", &handshake);
+                    self.stream.write_all(&handshake).await?;
+                    self.stream.flush().await?;
+                }
+            }
+            
             0x05 => {
                 println!("[0x05] Encryption response - decrypting AES session key");
                 if let Some(response) = self.handler.handle(0x05, &packet.payload)? {
