@@ -70,8 +70,8 @@ Launcher sets working directory to game root so DLLs can be loaded.
 ## Testing with Test Server
 
 ```bash
-# Terminal 1: Start test server
-cargo run --bin test_server --release
+# Terminal 1: Start login server
+cargo run -p ro2-login --release
 
 # Terminal 2: Launch game
 cargo run --bin launcher --release

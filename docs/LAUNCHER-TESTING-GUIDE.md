@@ -124,27 +124,26 @@ Once the game launches without Updater errors, you may encounter:
 
 ## Testing with Test Server
 
-### Start Test Server
+### Start Login Server
 
 ```bash
 # On Linux (or Windows with WSL)
 cd /home/admin/Documents/GitHub/Ragnoria
-cargo run --bin test_server --release
+cargo run -p ro2-login --release
 ```
 
 **Expected output:**
 ```
-Starting ProudNet test server on 0.0.0.0:7101
+Starting RO2 Login Server on 0.0.0.0:7101
 Server is ready to accept connections
-RSA-1024 key pair generated
-AES-128 encryption configured
+ProudNet encryption initialized
 ```
 
 ### Launch Game and Monitor
 
-**Terminal 1 (Server):**
+**Terminal 1 (Login Server):**
 ```bash
-cargo run --bin test_server --release
+cargo run -p ro2-login --release
 # Watch for connection messages
 ```
 
