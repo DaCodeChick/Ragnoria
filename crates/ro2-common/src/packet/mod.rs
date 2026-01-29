@@ -6,7 +6,7 @@
 pub mod framing;
 pub mod parser;
 
-pub use framing::{read_varint, write_varint, PacketFrame, PACKET_MAGIC};
+pub use framing::{PACKET_MAGIC, PacketFrame, read_varint, write_varint};
 
 use bytes::{Buf, BufMut, BytesMut};
 use serde::{Deserialize, Serialize};

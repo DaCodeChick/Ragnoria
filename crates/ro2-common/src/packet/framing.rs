@@ -266,10 +266,12 @@ mod tests {
         let result = PacketFrame::from_bytes(&data);
 
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Invalid packet magic"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Invalid packet magic")
+        );
     }
 
     #[test]
@@ -279,10 +281,12 @@ mod tests {
         let result = PacketFrame::from_bytes(&data);
 
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Incomplete packet"));
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Incomplete packet")
+        );
     }
 
     #[test]

@@ -18,11 +18,9 @@ pub struct ServerConfig {
 impl Default for Config {
     fn default() -> Self {
         // Try to find the game path automatically
-        let default_game_path = vec![
-            "/run/media/admin/FE6407F46407AE89/Gravity/Ragnarok Online 2 - Jawaii/SHIPPING/Rag2.exe",
+        let default_game_path = ["/run/media/admin/FE6407F46407AE89/Gravity/Ragnarok Online 2 - Jawaii/SHIPPING/Rag2.exe",
             "C:\\Program Files (x86)\\Gravity\\Ragnarok Online 2\\SHIPPING\\Rag2.exe",
-            "C:\\Program Files\\Gravity\\Ragnarok Online 2\\SHIPPING\\Rag2.exe",
-        ]
+            "C:\\Program Files\\Gravity\\Ragnarok Online 2\\SHIPPING\\Rag2.exe"]
         .iter()
         .find(|path| std::path::Path::new(path).exists())
         .map(|s| s.to_string())

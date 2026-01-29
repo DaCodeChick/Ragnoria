@@ -16,7 +16,9 @@ fn main() -> anyhow::Result<()> {
 
     if !std::path::Path::new(packets_file).exists() {
         eprintln!("Error: {} not found", packets_file);
-        eprintln!("Run: tshark -r /home/admin/Downloads/ro2login.pcapng -Y 'tcp.port == 7101 && tcp.len > 0' -T fields -e frame.number -e tcp.srcport -e data > /tmp/packets.txt");
+        eprintln!(
+            "Run: tshark -r /home/admin/Downloads/ro2login.pcapng -Y 'tcp.port == 7101 && tcp.len > 0' -T fields -e frame.number -e tcp.srcport -e data > /tmp/packets.txt"
+        );
         return Ok(());
     }
 
@@ -27,7 +29,7 @@ fn main() -> anyhow::Result<()> {
 
     let mut crypto = ProudNetCrypto::new();
     let mut rsa_key_found = false;
-    let mut session_key_found = false;
+    let session_key_found = false;
 
     for line in data.lines() {
         let parts: Vec<&str> = line.split('\t').collect();

@@ -62,19 +62,17 @@ impl Launcher {
                 self.launch_game();
                 Task::none()
             }
-            Message::BrowseGamePath => {
-                Task::perform(
-                    async {
-                        rfd::AsyncFileDialog::new()
-                            .add_filter("Rag2 Executable", &["exe"])
-                            .set_title("Select Rag2.exe")
-                            .pick_file()
-                            .await
-                            .map(|handle| handle.path().to_path_buf())
-                    },
-                    Message::GamePathSelected,
-                )
-            }
+            Message::BrowseGamePath => Task::perform(
+                async {
+                    rfd::AsyncFileDialog::new()
+                        .add_filter("Rag2 Executable", &["exe"])
+                        .set_title("Select Rag2.exe")
+                        .pick_file()
+                        .await
+                        .map(|handle| handle.path().to_path_buf())
+                },
+                Message::GamePathSelected,
+            ),
             Message::GamePathSelected(path) => {
                 if let Some(path) = path {
                     self.game_path = path.to_string_lossy().to_string();
@@ -186,7 +184,8 @@ impl Launcher {
         // Launch game
         match self.launch_game_process(&game_path, &self.server_ip) {
             Ok(_) => {
-                self.status_message = format!("Game launched! Connecting to {}:{}", self.server_ip, port);
+                self.status_message =
+                    format!("Game launched! Connecting to {}:{}", self.server_ip, port);
             }
             Err(e) => {
                 self.status_message = format!("Error launching game: {}", e);
@@ -201,7 +200,7 @@ impl Launcher {
         let shipping_dir = game_path
             .parent()
             .ok_or_else(|| anyhow::anyhow!("Invalid game path"))?;
-        
+
         let game_root_dir = shipping_dir
             .parent()
             .ok_or_else(|| anyhow::anyhow!("Invalid game directory structure"))?;

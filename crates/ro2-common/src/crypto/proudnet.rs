@@ -12,12 +12,10 @@
 //! 5. All subsequent game messages encrypted with AES in 0x25 packets
 
 use crate::Result;
-use aes::cipher::{generic_array::GenericArray, BlockDecrypt, BlockEncrypt, KeyInit};
 use aes::Aes128;
-use rand::{rngs::OsRng, Rng};
+use aes::cipher::{BlockDecrypt, BlockEncrypt, KeyInit, generic_array::GenericArray};
+use rand::{Rng, rngs::OsRng};
 use rsa::pkcs1::DecodeRsaPublicKey;
-#[cfg(feature = "server")]
-use rsa::pkcs1::EncodeRsaPublicKey;
 use rsa::{Oaep, Pkcs1v15Encrypt, RsaPrivateKey, RsaPublicKey};
 use sha1::Sha1;
 use sha2::Sha256;
@@ -225,7 +223,7 @@ impl ProudNetCrypto {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("No AES session key set"))?;
 
-        if data.len() % 16 != 0 {
+        if !data.len().is_multiple_of(16) {
             return Err(anyhow::anyhow!(
                 "Invalid AES data length: {} (must be multiple of 16)",
                 data.len()
@@ -243,12 +241,11 @@ impl ProudNetCrypto {
         }
 
         // Remove PKCS#7 padding
-        if let Some(&padding_len) = decrypted.last() {
-            if padding_len > 0 && padding_len <= 16 {
+        if let Some(&padding_len) = decrypted.last()
+            && padding_len > 0 && padding_len <= 16 {
                 let len = decrypted.len();
                 decrypted.truncate(len - padding_len as usize);
             }
-        }
 
         Ok(decrypted)
     }

@@ -121,7 +121,12 @@ impl ClientConnection {
 
             // Add to buffer
             self.buffer.extend_from_slice(&read_buf[..n]);
-            info!("[{}] Received {} bytes (buffer: {})", self.addr, n, self.buffer.len());
+            info!(
+                "[{}] Received {} bytes (buffer: {})",
+                self.addr,
+                n,
+                self.buffer.len()
+            );
 
             // Try to parse packets
             self.process_buffer().await?;
@@ -143,7 +148,11 @@ impl ClientConnection {
                     "[{}] Invalid packet magic: {:02x} {:02x}",
                     self.addr, self.buffer[0], self.buffer[1]
                 );
-                error!("[{}] Buffer: {}", self.addr, hex::encode(&self.buffer[..self.buffer.len().min(64)]));
+                error!(
+                    "[{}] Buffer: {}",
+                    self.addr,
+                    hex::encode(&self.buffer[..self.buffer.len().min(64)])
+                );
                 self.buffer.clear(); // Discard invalid data
                 break;
             }
@@ -178,22 +187,39 @@ impl ClientConnection {
     async fn handle_packet(&mut self, packet: PacketFrame) -> Result<()> {
         let opcode = packet.opcode().unwrap_or(0);
 
-        info!("[{}] Packet: opcode=0x{:02x}, size={}", self.addr, opcode, packet.payload.len());
+        info!(
+            "[{}] Packet: opcode=0x{:02x}, size={}",
+            self.addr,
+            opcode,
+            packet.payload.len()
+        );
 
         // Handle based on opcode
         match opcode {
             0x2F => {
                 info!("[{}] 0x2F: Policy request", self.addr);
                 if let Some(response) = self.handler.handle(0x2F, &packet.payload)? {
-                    info!("[{}] Sending XML policy ({} bytes)", self.addr, response.len());
+                    info!(
+                        "[{}] Sending XML policy ({} bytes)",
+                        self.addr,
+                        response.len()
+                    );
                     self.stream.write_all(&response).await?;
                     self.stream.flush().await?;
 
                     // Send 0x04 encryption handshake
                     info!("[{}] 0x04: Sending encryption handshake", self.addr);
                     let handshake = self.handler.build_encryption_handshake()?;
-                    info!("[{}] 0x04: Packet size: {} bytes", self.addr, handshake.len());
-                    info!("[{}] 0x04: First 32 bytes: {}", self.addr, hex::encode(&handshake[..32.min(handshake.len())]));
+                    info!(
+                        "[{}] 0x04: Packet size: {} bytes",
+                        self.addr,
+                        handshake.len()
+                    );
+                    info!(
+                        "[{}] 0x04: First 32 bytes: {}",
+                        self.addr,
+                        hex::encode(&handshake[..32.min(handshake.len())])
+                    );
                     self.stream.write_all(&handshake).await?;
                     self.stream.flush().await?;
                 }
@@ -221,7 +247,10 @@ impl ClientConnection {
                 info!("[{}] 0x07: Version check", self.addr);
                 if let Some(response) = self.handler.handle(0x07, &packet.payload)? {
                     let session_id = self.handler.session_id().unwrap_or(0);
-                    info!("[{}] 0x0A: Sending connection success (session: {})", self.addr, session_id);
+                    info!(
+                        "[{}] 0x0A: Sending connection success (session: {})",
+                        self.addr, session_id
+                    );
                     self.stream.write_all(&response).await?;
                     self.stream.flush().await?;
                 }
@@ -255,26 +284,43 @@ impl ClientConnection {
                 // Decrypt the packet
                 match self.handler.decrypt_packet(&packet.payload) {
                     Ok(decrypted) => {
-                        info!("[{}] Decrypted {} bytes: {}", self.addr, decrypted.len(), hex::encode(&decrypted[..decrypted.len().min(32)]));
+                        info!(
+                            "[{}] Decrypted {} bytes: {}",
+                            self.addr,
+                            decrypted.len(),
+                            hex::encode(&decrypted[..decrypted.len().min(32)])
+                        );
 
                         // Check if it's a game message (opcode >= 0x1000)
                         if decrypted.len() >= 2 {
                             let game_opcode = u16::from_le_bytes([decrypted[0], decrypted[1]]);
-                            info!("[{}] GAME MESSAGE: 0x{:04x} ({} bytes total)", self.addr, game_opcode, decrypted.len());
+                            info!(
+                                "[{}] GAME MESSAGE: 0x{:04x} ({} bytes total)",
+                                self.addr,
+                                game_opcode,
+                                decrypted.len()
+                            );
 
                             // TODO: Route to game message handlers
                             match game_opcode {
                                 0x0000 => {
-                                    info!("[{}] Game message 0x0000: Initial handshake? Data: {}", 
-                                        self.addr, 
+                                    info!(
+                                        "[{}] Game message 0x0000: Initial handshake? Data: {}",
+                                        self.addr,
                                         hex::encode(&decrypted[2..decrypted.len().min(18)])
                                     );
                                 }
                                 _ if game_opcode >= 0x1000 => {
-                                    info!("[{}] Game message opcode in expected range (>= 0x1000)", self.addr);
+                                    info!(
+                                        "[{}] Game message opcode in expected range (>= 0x1000)",
+                                        self.addr
+                                    );
                                 }
                                 _ => {
-                                    info!("[{}] Game message opcode unexpected: 0x{:04x}", self.addr, game_opcode);
+                                    info!(
+                                        "[{}] Game message opcode unexpected: 0x{:04x}",
+                                        self.addr, game_opcode
+                                    );
                                 }
                             }
                         }
@@ -295,7 +341,11 @@ impl ClientConnection {
 }
 
 /// Handle a single client connection
-async fn handle_client(socket: TcpStream, addr: SocketAddr, crypto: Arc<ProudNetCrypto>) -> Result<()> {
+async fn handle_client(
+    socket: TcpStream,
+    addr: SocketAddr,
+    crypto: Arc<ProudNetCrypto>,
+) -> Result<()> {
     let mut client = ClientConnection::new(socket, addr, crypto);
     client.handle().await
 }

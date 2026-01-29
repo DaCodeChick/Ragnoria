@@ -77,14 +77,12 @@ pub trait ProudNetPacket: Sized {
     fn deserialize(data: &[u8]) -> crate::Result<Self>;
 }
 
-pub mod rmi;
-pub mod handler;
 pub mod dispatcher;
+pub mod handler;
 pub mod proudnet;
+pub mod rmi;
 
-pub use handler::{
-    GameMessageHandler, GameContext, ConnectionInfo, HandlerRegistry, BoxedHandler,
-};
-pub use dispatcher::{MessageDispatcher, DispatcherStats};
+pub use dispatcher::{DispatcherStats, MessageDispatcher};
+pub use handler::{BoxedHandler, ConnectionInfo, GameContext, GameMessageHandler, HandlerRegistry};
 #[cfg(feature = "server")]
-pub use proudnet::{ProudNetHandler, ProudNetSettings, FLASH_POLICY_XML};
+pub use proudnet::{FLASH_POLICY_XML, ProudNetHandler, ProudNetSettings};

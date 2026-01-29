@@ -18,16 +18,16 @@ use std::sync::Arc;
 pub struct GameContext {
     /// Session ID for this connection
     pub session_id: u64,
-    
+
     /// Current game state (0=disconnected, 1=lobby, 2=in_game)
     pub game_state: u32,
-    
+
     /// Character ID (if in-game)
     pub character_id: Option<u32>,
-    
+
     /// Account ID
     pub account_id: Option<u32>,
-    
+
     /// Connection metadata
     pub connection_info: ConnectionInfo,
 }
@@ -37,10 +37,10 @@ pub struct GameContext {
 pub struct ConnectionInfo {
     /// Remote IP address
     pub remote_addr: String,
-    
+
     /// Connection timestamp
     pub connected_at: chrono::DateTime<chrono::Utc>,
-    
+
     /// Last activity timestamp
     pub last_activity: chrono::DateTime<chrono::Utc>,
 }
@@ -61,14 +61,14 @@ impl GameContext {
             },
         }
     }
-    
+
     /// Check if game state is active (lobby or in-game)
     ///
     /// Mirrors IsGameStateActive check from 0x006a60a0
     pub fn is_game_state_active(&self) -> bool {
         self.game_state == 1 || self.game_state == 2
     }
-    
+
     /// Update last activity timestamp
     pub fn update_activity(&mut self) {
         self.connection_info.last_activity = chrono::Utc::now();
@@ -100,10 +100,10 @@ pub trait GameMessageHandler: Send + Sync {
         data: &[u8],
         context: &mut GameContext,
     ) -> Result<Option<Vec<u8>>>;
-    
+
     /// Get the message opcode this handler handles
     fn opcode(&self) -> u32;
-    
+
     /// Get handler name for logging
     fn name(&self) -> &'static str;
 }
@@ -123,23 +123,23 @@ impl HandlerRegistry {
             handlers: std::collections::HashMap::new(),
         }
     }
-    
+
     /// Register a handler for an opcode
     pub fn register(&mut self, handler: BoxedHandler) {
         let opcode = handler.opcode();
         self.handlers.insert(opcode, handler);
     }
-    
+
     /// Get handler for an opcode
     pub fn get(&self, opcode: u32) -> Option<&BoxedHandler> {
         self.handlers.get(&opcode)
     }
-    
+
     /// Check if handler is registered for opcode
     pub fn has_handler(&self, opcode: u32) -> bool {
         self.handlers.contains_key(&opcode)
     }
-    
+
     /// Get all registered opcodes
     pub fn registered_opcodes(&self) -> Vec<u32> {
         self.handlers.keys().copied().collect()
@@ -155,9 +155,9 @@ impl Default for HandlerRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     struct TestHandler;
-    
+
     #[async_trait]
     impl GameMessageHandler for TestHandler {
         async fn handle(
@@ -168,40 +168,40 @@ mod tests {
         ) -> Result<Option<Vec<u8>>> {
             Ok(None)
         }
-        
+
         fn opcode(&self) -> u32 {
             0x1001
         }
-        
+
         fn name(&self) -> &'static str {
             "TestHandler"
         }
     }
-    
+
     #[test]
     fn test_handler_registry() {
         let mut registry = HandlerRegistry::new();
         let handler = Arc::new(TestHandler);
-        
+
         registry.register(handler);
-        
+
         assert!(registry.has_handler(0x1001));
         assert!(!registry.has_handler(0x1002));
         assert_eq!(registry.registered_opcodes(), vec![0x1001]);
     }
-    
+
     #[test]
     fn test_game_context() {
         let ctx = GameContext::new(123, "127.0.0.1:8080".to_string());
-        
+
         assert_eq!(ctx.session_id, 123);
         assert_eq!(ctx.game_state, 0);
         assert!(!ctx.is_game_state_active());
-        
+
         let mut ctx = ctx;
         ctx.game_state = 1;
         assert!(ctx.is_game_state_active());
-        
+
         ctx.game_state = 2;
         assert!(ctx.is_game_state_active());
     }

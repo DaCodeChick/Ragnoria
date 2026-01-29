@@ -5,4 +5,4 @@
 
 pub mod handlers;
 
-pub use handlers::SystemMessageHandler;
+pub use handlers::system::SystemMessageHandler;

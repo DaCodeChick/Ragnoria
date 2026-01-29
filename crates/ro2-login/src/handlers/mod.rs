@@ -10,7 +10,7 @@ pub async fn handle_req_login(_data: &[u8]) -> Result<Vec<u8>> {
     // 3. Validate password hash
     // 4. Generate session key
     // 5. Return AnsLogin response
-    
+
     unimplemented!("ReqLogin handler not yet implemented")
 }
 
@@ -19,6 +19,6 @@ pub async fn handle_req_server_status(_data: &[u8]) -> Result<Vec<u8>> {
     // TODO: Implement server status handler
     // 1. Query available lobby/world servers
     // 2. Return AckServerStatus with server list
-    
+
     unimplemented!("ReqServerStatus handler not yet implemented")
 }

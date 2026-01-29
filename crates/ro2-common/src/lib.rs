@@ -6,12 +6,12 @@
 //! - Cryptography (AES/RSA)
 //! - Database models
 
-pub mod protocol;
-pub mod packet;
 pub mod crypto;
 pub mod database;
+pub mod packet;
+pub mod protocol;
 
-pub use packet::{PacketHeader, PacketBuffer, NetworkPacket};
+pub use packet::{NetworkPacket, PacketBuffer, PacketHeader};
 pub use protocol::MessageType;
 
 /// Common result type for RO2 operations

@@ -1,7 +1,7 @@
 //! Database query functions
 
-use sqlx::{Pool, Sqlite};
 use super::{Account, Session};
+use sqlx::{Pool, Sqlite};
 
 /// Account queries
 pub struct AccountQueries;
@@ -12,16 +12,14 @@ impl AccountQueries {
         pool: &Pool<Sqlite>,
         username: &str,
     ) -> crate::Result<Option<Account>> {
-        let account = sqlx::query_as::<_, Account>(
-            "SELECT * FROM accounts WHERE username = ?"
-        )
-        .bind(username)
-        .fetch_optional(pool)
-        .await?;
-        
+        let account = sqlx::query_as::<_, Account>("SELECT * FROM accounts WHERE username = ?")
+            .bind(username)
+            .fetch_optional(pool)
+            .await?;
+
         Ok(account)
     }
-    
+
     /// Create new account
     pub async fn create(
         pool: &Pool<Sqlite>,
@@ -36,7 +34,7 @@ impl AccountQueries {
         .bind(chrono::Utc::now().timestamp())
         .execute(pool)
         .await?;
-        
+
         Ok(result.last_insert_rowid())
     }
 }
@@ -54,7 +52,7 @@ impl SessionQueries {
     ) -> crate::Result<i64> {
         let now = chrono::Utc::now().timestamp();
         let expires_at = now + ttl_seconds;
-        
+
         let result = sqlx::query(
             "INSERT INTO sessions (account_id, session_key, created_at, expires_at, is_active) VALUES (?, ?, ?, ?, 1)"
         )
@@ -64,25 +62,25 @@ impl SessionQueries {
         .bind(expires_at)
         .execute(pool)
         .await?;
-        
+
         Ok(result.last_insert_rowid())
     }
-    
+
     /// Validate session key
     pub async fn validate(
         pool: &Pool<Sqlite>,
         session_key: &str,
     ) -> crate::Result<Option<Session>> {
         let now = chrono::Utc::now().timestamp();
-        
+
         let session = sqlx::query_as::<_, Session>(
-            "SELECT * FROM sessions WHERE session_key = ? AND is_active = 1 AND expires_at > ?"
+            "SELECT * FROM sessions WHERE session_key = ? AND is_active = 1 AND expires_at > ?",
         )
         .bind(session_key)
         .bind(now)
         .fetch_optional(pool)
         .await?;
-        
+
         Ok(session)
     }
 }

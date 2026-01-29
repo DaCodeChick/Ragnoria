@@ -30,13 +30,16 @@ struct ClientConnection {
 impl ClientConnection {
     fn new(stream: TcpStream, addr: SocketAddr) -> Self {
         println!("\n[CONNECT] New client: {}", addr);
-        
+
         let settings = ProudNetSettings::default();
         println!("[SETTINGS] Using default ProudNet settings:");
         println!("  - AES key: {} bits", settings.aes_key_bits);
-        println!("  - Fast encrypt key: {} bits", settings.fast_encrypt_key_bits);
+        println!(
+            "  - Fast encrypt key: {} bits",
+            settings.fast_encrypt_key_bits
+        );
         println!("  - Version: 0x{:08x}", settings.version);
-        
+
         Self {
             stream,
             addr,
@@ -65,7 +68,12 @@ impl ClientConnection {
 
             // Add to buffer
             self.buffer.extend_from_slice(&read_buf[..n]);
-            println!("\n[RECV] {} bytes from {} (buffer: {} bytes)", n, self.addr, self.buffer.len());
+            println!(
+                "\n[RECV] {} bytes from {} (buffer: {} bytes)",
+                n,
+                self.addr,
+                self.buffer.len()
+            );
 
             // Try to parse packets
             self.process_buffer().await?;
@@ -83,9 +91,14 @@ impl ClientConnection {
 
             // Check for ProudNet magic
             if &self.buffer[0..2] != &[0x13, 0x57] {
-                println!("\n[ERROR] Invalid packet magic: {:02x} {:02x}", 
-                         self.buffer[0], self.buffer[1]);
-                println!("[ERROR] Buffer content: {}", hex::encode(&self.buffer[..self.buffer.len().min(64)]));
+                println!(
+                    "\n[ERROR] Invalid packet magic: {:02x} {:02x}",
+                    self.buffer[0], self.buffer[1]
+                );
+                println!(
+                    "[ERROR] Buffer content: {}",
+                    hex::encode(&self.buffer[..self.buffer.len().min(64)])
+                );
                 self.buffer.clear(); // Discard invalid data
                 break;
             }
@@ -95,7 +108,7 @@ impl ClientConnection {
                 Ok((packet, size)) => {
                     // Remove parsed bytes from buffer
                     self.buffer.drain(..size);
-                    
+
                     // Process packet
                     self.handle_packet(packet).await?;
                 }
@@ -119,8 +132,12 @@ impl ClientConnection {
     /// Handle a parsed ProudNet packet
     async fn handle_packet(&mut self, packet: PacketFrame) -> Result<()> {
         let opcode = packet.opcode().unwrap_or(0);
-        
-        println!("\n[PACKET] Opcode: 0x{:02x}, Size: {} bytes", opcode, packet.payload.len());
+
+        println!(
+            "\n[PACKET] Opcode: 0x{:02x}, Size: {} bytes",
+            opcode,
+            packet.payload.len()
+        );
         self.hexdump(&format!("Opcode 0x{:02x}", opcode), &packet.payload);
 
         // Handle based on opcode
@@ -128,10 +145,13 @@ impl ClientConnection {
             0x2F => {
                 println!("[0x2F] Policy request (ProudNet framed)");
                 if let Some(response) = self.handler.handle(0x2F, &packet.payload)? {
-                    println!("[0x2F] Sending XML policy ({} bytes, NO framing)", response.len());
+                    println!(
+                        "[0x2F] Sending XML policy ({} bytes, NO framing)",
+                        response.len()
+                    );
                     self.stream.write_all(&response).await?;
                     self.stream.flush().await?;
-                    
+
                     // Now send 0x04 encryption handshake
                     println!("\n[0x04] Sending encryption handshake");
                     let handshake = self.handler.build_encryption_handshake()?;
@@ -140,7 +160,7 @@ impl ClientConnection {
                     self.stream.flush().await?;
                 }
             }
-            
+
             0x05 => {
                 println!("[0x05] Encryption response - decrypting AES session key");
                 if let Some(response) = self.handler.handle(0x05, &packet.payload)? {
@@ -149,18 +169,20 @@ impl ClientConnection {
                     self.stream.flush().await?;
                 }
             }
-            
+
             0x07 => {
                 println!("[0x07] Version check");
                 if let Some(response) = self.handler.handle(0x07, &packet.payload)? {
-                    println!("[0x0A] Sending connection success (session ID: {})", 
-                             self.handler.session_id().unwrap_or(0));
+                    println!(
+                        "[0x0A] Sending connection success (session ID: {})",
+                        self.handler.session_id().unwrap_or(0)
+                    );
                     self.hexdump("0x0A packet", &response);
                     self.stream.write_all(&response).await?;
                     self.stream.flush().await?;
                 }
             }
-            
+
             0x1B => {
                 println!("[0x1B] Heartbeat request");
                 if let Some(response) = self.handler.handle(0x1B, &packet.payload)? {
@@ -169,26 +191,29 @@ impl ClientConnection {
                     self.stream.flush().await?;
                 }
             }
-            
+
             0x25 | 0x26 => {
-                println!("[0x{:02x}] ENCRYPTED PACKET - attempting decryption", opcode);
-                
+                println!(
+                    "[0x{:02x}] ENCRYPTED PACKET - attempting decryption",
+                    opcode
+                );
+
                 if !self.handler.is_encryption_ready() {
                     println!("[WARNING] Encryption not ready yet, cannot decrypt");
                     return Ok(());
                 }
-                
+
                 // Decrypt the packet
                 match self.handler.decrypt_packet(&packet.payload) {
                     Ok(decrypted) => {
                         println!("[SUCCESS] Decrypted {} bytes!", decrypted.len());
                         self.hexdump("DECRYPTED DATA", &decrypted);
-                        
+
                         // Check if it's a game message (opcode >= 0x1000)
                         if decrypted.len() >= 2 {
                             let game_opcode = u16::from_le_bytes([decrypted[0], decrypted[1]]);
                             println!("\n!!! GAME MESSAGE OPCODE: 0x{:04x} !!!", game_opcode);
-                            
+
                             if game_opcode >= 0x1000 {
                                 println!("!!! THIS IS A GAME MESSAGE (0x1000+) !!!");
                             }
@@ -199,7 +224,7 @@ impl ClientConnection {
                     }
                 }
             }
-            
+
             _ => {
                 println!("[INFO] Unhandled opcode: 0x{:02x}", opcode);
             }
@@ -211,25 +236,29 @@ impl ClientConnection {
     /// Print hexdump of data
     fn hexdump(&self, label: &str, data: &[u8]) {
         println!("[HEXDUMP] {} ({} bytes):", label, data.len());
-        
+
         // Show first 256 bytes max
         let display_len = data.len().min(256);
-        
+
         for (i, chunk) in data[..display_len].chunks(16).enumerate() {
             print!("  {:04x}  ", i * 16);
-            
+
             // Hex
             for (j, byte) in chunk.iter().enumerate() {
                 print!("{:02x} ", byte);
-                if j == 7 { print!(" "); }
+                if j == 7 {
+                    print!(" ");
+                }
             }
-            
+
             // Padding
             for _ in chunk.len()..16 {
                 print!("   ");
-                if chunk.len() <= 8 { print!(" "); }
+                if chunk.len() <= 8 {
+                    print!(" ");
+                }
             }
-            
+
             // ASCII
             print!(" |");
             for byte in chunk {
@@ -242,7 +271,7 @@ impl ClientConnection {
             }
             println!("|");
         }
-        
+
         if data.len() > display_len {
             println!("  ... ({} more bytes)", data.len() - display_len);
         }
@@ -261,27 +290,29 @@ async fn main() -> Result<()> {
     println!("  3. Decrypt 0x25/0x26 encrypted packets");
     println!("  4. Extract game message opcodes");
     println!();
-    
+
     let addr = "0.0.0.0:7101";
     let listener = TcpListener::bind(addr).await?;
-    
+
     println!("Server listening on: {}", addr);
     println!();
     println!("Configure RO2 client to connect to:");
     println!("  - localhost:7101 (if on same machine)");
-    println!("  - {}:7101 (if on different machine)", 
-             local_ip_address::local_ip().unwrap_or("0.0.0.0".parse().unwrap()));
+    println!(
+        "  - {}:7101 (if on different machine)",
+        local_ip_address::local_ip().unwrap_or("0.0.0.0".parse().unwrap())
+    );
     println!();
     println!("Waiting for connections...");
     println!("==============================================");
 
     loop {
         let (stream, addr) = listener.accept().await?;
-        
+
         // Spawn a task for this client
         tokio::spawn(async move {
             let mut client = ClientConnection::new(stream, addr);
-            
+
             if let Err(e) = client.handle().await {
                 eprintln!("\n[ERROR] Client {} error: {}", addr, e);
             }

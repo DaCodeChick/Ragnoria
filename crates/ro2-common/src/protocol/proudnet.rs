@@ -33,7 +33,7 @@
 
 use crate::crypto::ProudNetCrypto;
 use crate::packet::framing::PacketFrame;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 #[cfg(feature = "server")]
 use rsa::pkcs1::EncodeRsaPublicKey;
 #[cfg(feature = "server")]
@@ -215,7 +215,7 @@ impl ProudNetHandler {
 
     /// Build 0x04 - Encryption handshake packet (send RSA public key)
     ///
-    /// Packet structure (188 bytes total from PCAP frame 1946):
+    /// Packet structure (188 bytes total):
     /// ```text
     /// ProudNet Framing (5 bytes):
     ///   13 57           Magic (0x5713 LE)
@@ -242,13 +242,6 @@ impl ProudNetHandler {
     ///     30 81 89 ...    DER-encoded RSA-1024 public key (140 bytes)
     ///                     PKCS#1 ASN.1 structure with modulus and exponent
     /// ```
-    ///
-    /// **Notes from PCAP analysis (frame 1946):**
-    /// - Total size matches real server: 188 bytes
-    /// - Settings structure confirmed through Ghidra analysis
-    /// - AES and Fast Encrypt key sizes validated at client offsets +0x638 and +0x63c
-    /// - Most fields are not fully understood yet
-    /// - AES key size and fast encrypt key size are confirmed
     pub fn build_encryption_handshake(&self) -> Result<Vec<u8>> {
         let mut payload = Vec::new();
 

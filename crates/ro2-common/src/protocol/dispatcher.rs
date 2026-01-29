@@ -22,7 +22,7 @@ use tracing::{debug, error, warn};
 pub struct MessageDispatcher {
     /// Handler registry (opcode -> handler)
     registry: HandlerRegistry,
-    
+
     /// Statistics
     stats: DispatcherStats,
 }
@@ -32,13 +32,13 @@ pub struct MessageDispatcher {
 pub struct DispatcherStats {
     /// Total messages processed
     pub messages_processed: u64,
-    
+
     /// Messages processed successfully
     pub messages_success: u64,
-    
+
     /// Messages that failed processing
     pub messages_failed: u64,
-    
+
     /// Messages with no registered handler
     pub messages_unhandled: u64,
 }
@@ -51,7 +51,7 @@ impl MessageDispatcher {
             stats: DispatcherStats::default(),
         }
     }
-    
+
     /// Create a dispatcher with pre-registered handlers
     pub fn with_handlers(handlers: Vec<BoxedHandler>) -> Self {
         let mut dispatcher = Self::new();
@@ -60,14 +60,18 @@ impl MessageDispatcher {
         }
         dispatcher
     }
-    
+
     /// Register a handler for an opcode
     pub fn register_handler(&mut self, handler: BoxedHandler) {
         let opcode = handler.opcode();
-        debug!("Registering handler for opcode 0x{:04x}: {}", opcode, handler.name());
+        debug!(
+            "Registering handler for opcode 0x{:04x}: {}",
+            opcode,
+            handler.name()
+        );
         self.registry.register(handler);
     }
-    
+
     /// Dispatch a message to its handler
     ///
     /// # Parameters
@@ -86,7 +90,7 @@ impl MessageDispatcher {
         context: &mut GameContext,
     ) -> Result<Option<Vec<u8>>> {
         self.stats.messages_processed += 1;
-        
+
         // Look up handler
         let handler = match self.registry.get(packet_id) {
             Some(h) => h,
@@ -99,7 +103,7 @@ impl MessageDispatcher {
                 return Ok(None);
             }
         };
-        
+
         // Dispatch to handler
         debug!(
             "Dispatching opcode 0x{:04x} to {} (session: {})",
@@ -107,7 +111,7 @@ impl MessageDispatcher {
             handler.name(),
             context.session_id
         );
-        
+
         match handler.handle(packet_id, data, context).await {
             Ok(response) => {
                 self.stats.messages_success += 1;
@@ -130,22 +134,22 @@ impl MessageDispatcher {
             }
         }
     }
-    
+
     /// Check if handler is registered for opcode
     pub fn has_handler(&self, opcode: u32) -> bool {
         self.registry.has_handler(opcode)
     }
-    
+
     /// Get list of all registered opcodes
     pub fn registered_opcodes(&self) -> Vec<u32> {
         self.registry.registered_opcodes()
     }
-    
+
     /// Get dispatcher statistics
     pub fn stats(&self) -> &DispatcherStats {
         &self.stats
     }
-    
+
     /// Reset statistics
     pub fn reset_stats(&mut self) {
         self.stats = DispatcherStats::default();
@@ -164,12 +168,12 @@ mod tests {
     use crate::protocol::handler::GameMessageHandler;
     use async_trait::async_trait;
     use std::sync::Arc;
-    
+
     struct TestHandler {
         opcode: u32,
         name: &'static str,
     }
-    
+
     #[async_trait]
     impl GameMessageHandler for TestHandler {
         async fn handle(
@@ -180,58 +184,58 @@ mod tests {
         ) -> Result<Option<Vec<u8>>> {
             Ok(Some(vec![1, 2, 3, 4]))
         }
-        
+
         fn opcode(&self) -> u32 {
             self.opcode
         }
-        
+
         fn name(&self) -> &'static str {
             self.name
         }
     }
-    
+
     #[tokio::test]
     async fn test_dispatcher_with_handler() {
         let handler = Arc::new(TestHandler {
             opcode: 0x1001,
             name: "TestHandler",
         });
-        
+
         let mut dispatcher = MessageDispatcher::new();
         dispatcher.register_handler(handler);
-        
+
         let mut ctx = GameContext::new(123, "127.0.0.1:8080".to_string());
         let response = dispatcher.dispatch(0x1001, &[1, 2, 3], &mut ctx).await;
-        
+
         assert!(response.is_ok());
         assert_eq!(response.unwrap(), Some(vec![1, 2, 3, 4]));
         assert_eq!(dispatcher.stats().messages_processed, 1);
         assert_eq!(dispatcher.stats().messages_success, 1);
     }
-    
+
     #[tokio::test]
     async fn test_dispatcher_no_handler() {
         let mut dispatcher = MessageDispatcher::new();
         let mut ctx = GameContext::new(123, "127.0.0.1:8080".to_string());
-        
+
         let response = dispatcher.dispatch(0x9999, &[1, 2, 3], &mut ctx).await;
-        
+
         assert!(response.is_ok());
         assert_eq!(response.unwrap(), None);
         assert_eq!(dispatcher.stats().messages_processed, 1);
         assert_eq!(dispatcher.stats().messages_unhandled, 1);
     }
-    
+
     #[test]
     fn test_dispatcher_has_handler() {
         let handler = Arc::new(TestHandler {
             opcode: 0x1001,
             name: "TestHandler",
         });
-        
+
         let mut dispatcher = MessageDispatcher::new();
         dispatcher.register_handler(handler);
-        
+
         assert!(dispatcher.has_handler(0x1001));
         assert!(!dispatcher.has_handler(0x1002));
     }
