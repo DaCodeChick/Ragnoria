@@ -276,55 +276,41 @@ impl Launcher {
         println!();
 
         // Based on Ghidra analysis of Rag2.exe:
-        // CRITICAL DISCOVERY: ValidateGameLaunchParameters() checks for "-FromLauncher" flag!
-        // If this flag is NOT present, the game shows two error dialogs:
-        //   1. Korean error about "Updater" needing to launch the game
-        //   2. Check for ../Updater.exe and shows error if not found
+        // CRITICAL DISCOVERIES:
+        // 1. ValidateGameLaunchParameters() checks for "-FromLauncher" flag (hyphen, not slash)
+        // 2. ParseGameLaunchArguments() tokenizes command line by " /" (space and forward slash)
+        // 3. Parameters are parsed as key=value pairs: /KEY=VALUE
+        // 4. GetGameServerIPFromCommandLine() looks for "IP" key in g_LaunchParametersMap
         //
-        // The decompiled code shows:
-        //   if (!strcmp(commandLine, "-FromLauncher")) return; // Success!
-        //   else show_error("Updater") and check for ../Updater.exe
+        // Decompiled ParseGameLaunchArguments:
+        //   TokenizeStringByDelimiters(&tokens, commandLine, " /");
+        //   For each token:
+        //     TokenizeStringByDelimiters(&kv, token, "=");
+        //     if (kv.count == 2) map.insert(kv[0], kv[1]);
         //
-        // SOLUTION: Always include "-FromLauncher" in command line!
+        // SOLUTION: Use -FromLauncher (hyphen) + /IP=x.x.x.x (slash for parameter)
         
-        // Try different parameter formats (all include -FromLauncher)
         let commands_to_try = vec![
-            // Option 0: Just -FromLauncher flag (RECOMMENDED - Ghidra analysis)
-            vec![
-                String::from("-FromLauncher"),
-            ],
-            
-            // Option 1: -FromLauncher + server IP and port
-            vec![
-                String::from("-FromLauncher"),
-                self.server_ip.clone(),
-                self.server_port.clone(),
-            ],
-            
-            // Option 2: -FromLauncher + /IP and /PORT flags
+            // Option 0: -FromLauncher + /IP=x.x.x.x (CORRECT FORMAT from Ghidra)
             vec![
                 String::from("-FromLauncher"),
                 format!("/IP={}", self.server_ip),
-                format!("/PORT={}", self.server_port),
             ],
             
-            // Option 3: -FromLauncher + combined IP:PORT
+            // Option 1: Just -FromLauncher flag (for testing - may use default server)
             vec![
                 String::from("-FromLauncher"),
-                format!("{}:{}", self.server_ip, self.server_port),
             ],
             
-            // Option 4: NO parameters (will show Updater error!)
+            // Option 2: NO parameters (ERROR TEST - will show Updater error)
             vec![],
         ];
 
-        // Use Option 0 by default (just -FromLauncher flag)
+        // Use Option 0 by default (-FromLauncher + /IP=x.x.x.x)
         // You can change this to test different parameter combinations:
-        // 0 = -FromLauncher only (RECOMMENDED - bypasses Updater check)
-        // 1 = -FromLauncher + IP PORT
-        // 2 = -FromLauncher + /IP=x.x.x.x /PORT=xxxx
-        // 3 = -FromLauncher + IP:PORT combined
-        // 4 = No parameters (will show Updater error for testing)
+        // 0 = -FromLauncher /IP=x.x.x.x (CORRECT - default)
+        // 1 = -FromLauncher only (may use default/hosts file)
+        // 2 = No parameters (ERROR TEST - shows Updater error)
         let option_index = std::env::var("LAUNCH_OPTION")
             .ok()
             .and_then(|s| s.parse::<usize>().ok())
@@ -335,11 +321,9 @@ impl Launcher {
         println!("Using launch option {}: {:?}", option_index, args);
         println!();
         println!("To try different options, set LAUNCH_OPTION environment variable:");
-        println!("  LAUNCH_OPTION=0  - -FromLauncher only (RECOMMENDED - default)");
-        println!("  LAUNCH_OPTION=1  - -FromLauncher + IP PORT");
-        println!("  LAUNCH_OPTION=2  - -FromLauncher + /IP=x.x.x.x /PORT=xxxx");
-        println!("  LAUNCH_OPTION=3  - -FromLauncher + IP:PORT combined");
-        println!("  LAUNCH_OPTION=4  - No parameters (ERROR TEST - will show Updater error)");
+        println!("  LAUNCH_OPTION=0  - -FromLauncher /IP=x.x.x.x (CORRECT - default)");
+        println!("  LAUNCH_OPTION=1  - -FromLauncher only");
+        println!("  LAUNCH_OPTION=2  - No parameters (ERROR TEST)");
         println!();
 
         #[cfg(target_os = "windows")]
