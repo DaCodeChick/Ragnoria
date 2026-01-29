@@ -3,7 +3,6 @@
 //! Implements parsing logic for incoming network packets based on the
 //! ProudNet protocol structure discovered through Ghidra analysis.
 
-use crate::packet::PacketHeader;
 use crate::protocol::MessageType;
 use bytes::{Buf, Bytes};
 

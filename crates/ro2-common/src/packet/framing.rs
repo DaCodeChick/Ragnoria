@@ -13,7 +13,7 @@
 
 use crate::Result;
 use bytes::{Buf, BufMut};
-use std::io::{self, Cursor};
+use std::io::Cursor;
 
 /// Magic number identifying RO2 packets (little endian)
 pub const PACKET_MAGIC: u16 = 0x5713;

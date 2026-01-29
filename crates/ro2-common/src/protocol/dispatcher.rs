@@ -4,7 +4,7 @@
 //! The client uses function pointers to dispatch messages to handlers,
 //! we use a HashMap-based registry for flexibility.
 
-use super::handler::{BoxedHandler, GameContext, GameMessageHandler, HandlerRegistry};
+use super::handler::{BoxedHandler, GameContext, HandlerRegistry};
 use crate::Result;
 use tracing::{debug, error, warn};
 

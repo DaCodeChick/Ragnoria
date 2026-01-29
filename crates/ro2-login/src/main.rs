@@ -236,6 +236,14 @@ impl ClientConnection {
                 }
             }
 
+            0x1C => {
+                info!("[{}] 0x1C: Keep-alive ping", self.addr);
+                if let Some(response) = self.handler.handle(0x1C, &packet.payload)? {
+                    self.stream.write_all(&response).await?;
+                    self.stream.flush().await?;
+                }
+            }
+
             0x25 | 0x26 => {
                 info!("[{}] 0x{:02x}: Encrypted packet", self.addr, opcode);
 
@@ -247,16 +255,27 @@ impl ClientConnection {
                 // Decrypt the packet
                 match self.handler.decrypt_packet(&packet.payload) {
                     Ok(decrypted) => {
-                        info!("[{}] Decrypted {} bytes", self.addr, decrypted.len());
+                        info!("[{}] Decrypted {} bytes: {}", self.addr, decrypted.len(), hex::encode(&decrypted[..decrypted.len().min(32)]));
 
                         // Check if it's a game message (opcode >= 0x1000)
                         if decrypted.len() >= 2 {
                             let game_opcode = u16::from_le_bytes([decrypted[0], decrypted[1]]);
-                            info!("[{}] GAME MESSAGE: 0x{:04x}", self.addr, game_opcode);
+                            info!("[{}] GAME MESSAGE: 0x{:04x} ({} bytes total)", self.addr, game_opcode, decrypted.len());
 
                             // TODO: Route to game message handlers
-                            if game_opcode >= 0x1000 {
-                                info!("[{}] Game message opcode in range", self.addr);
+                            match game_opcode {
+                                0x0000 => {
+                                    info!("[{}] Game message 0x0000: Initial handshake? Data: {}", 
+                                        self.addr, 
+                                        hex::encode(&decrypted[2..decrypted.len().min(18)])
+                                    );
+                                }
+                                _ if game_opcode >= 0x1000 => {
+                                    info!("[{}] Game message opcode in expected range (>= 0x1000)", self.addr);
+                                }
+                                _ => {
+                                    info!("[{}] Game message opcode unexpected: 0x{:04x}", self.addr, game_opcode);
+                                }
                             }
                         }
                     }

@@ -15,10 +15,13 @@ use crate::Result;
 use aes::cipher::{generic_array::GenericArray, BlockDecrypt, BlockEncrypt, KeyInit};
 use aes::Aes128;
 use rand::{rngs::OsRng, Rng};
-use rsa::pkcs1::{DecodeRsaPublicKey, EncodeRsaPublicKey};
+use rsa::pkcs1::DecodeRsaPublicKey;
+#[cfg(feature = "server")]
+use rsa::pkcs1::EncodeRsaPublicKey;
 use rsa::{Oaep, Pkcs1v15Encrypt, RsaPrivateKey, RsaPublicKey};
 use sha1::Sha1;
 use sha2::Sha256;
+use tracing::{debug, warn};
 
 /// ProudNet encryption handler
 ///
@@ -129,6 +132,9 @@ impl ProudNetCrypto {
 
     #[cfg(feature = "server")]
     /// Decrypt session key with RSA (server-side, opcode 0x05)
+    ///
+    /// RO2 client uses OAEP-SHA1 padding (circa 2011), not PKCS#1 v1.5.
+    /// This was discovered through Ghidra analysis of RSA_ApplyPadding function.
     pub fn decrypt_session_key_rsa(&mut self, encrypted_key: &[u8]) -> Result<Vec<u8>> {
         use rsa::traits::PublicKeyParts;
 
@@ -137,79 +143,47 @@ impl ProudNetCrypto {
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("No RSA private key set"))?;
 
-        println!(
-            "[RSA] Decrypting {} bytes with {}-bit key",
-            encrypted_key.len(),
-            private_key.size() * 8
-        );
-        println!(
-            "[RSA] Private key modulus (first 32 bytes): {}",
-            hex::encode(
-                &private_key.n().to_bytes_le()[..32.min(private_key.n().to_bytes_le().len())]
-            )
-        );
-        println!(
-            "[RSA] Encrypted data (first 32 bytes): {}",
-            hex::encode(&encrypted_key[..32.min(encrypted_key.len())])
+        debug!(
+            key_size_bits = private_key.size() * 8,
+            encrypted_len = encrypted_key.len(),
+            "Attempting RSA decryption"
         );
 
-        // Try PKCS#1 v1.5 first (most common)
-        let decrypted = match private_key.decrypt(Pkcs1v15Encrypt, encrypted_key) {
-            Ok(data) => {
-                println!("[RSA] ✓ Decrypted with PKCS#1 v1.5 padding");
-                data
-            }
-            Err(e1) => {
-                println!("[RSA] PKCS#1 v1.5 decryption failed: {}", e1);
-                println!("[RSA] Trying OAEP-SHA1 padding (common in 2011-era software)...");
+        // RO2 uses OAEP-SHA1 (discovered via Ghidra analysis of RSA_ApplyPadding)
+        // Try fallback schemes in case other clients behave differently
+        let decrypted = private_key
+            .decrypt(Oaep::new::<Sha1>(), encrypted_key)
+            .or_else(|e1| {
+                debug!(error = %e1, "OAEP-SHA1 failed, trying PKCS#1 v1.5");
+                private_key.decrypt(Pkcs1v15Encrypt, encrypted_key)
+            })
+            .or_else(|e2| {
+                debug!(error = %e2, "PKCS#1 v1.5 failed, trying OAEP-SHA256");
+                private_key.decrypt(Oaep::new::<Sha256>(), encrypted_key)
+            })
+            .map_err(|e| {
+                warn!(
+                    encrypted_len = encrypted_key.len(),
+                    key_size = private_key.size() * 8,
+                    error = %e,
+                    "All RSA decryption methods failed"
+                );
+                anyhow::anyhow!("Failed to decrypt session key with RSA: {}", e)
+            })?;
 
-                // Try OAEP with SHA-1 (more common in older software like RO2)
-                match private_key.decrypt(Oaep::new::<Sha1>(), encrypted_key) {
-                    Ok(data) => {
-                        println!("[RSA] ✓ Decrypted with OAEP-SHA1 padding");
-                        data
-                    }
-                    Err(e2) => {
-                        println!("[RSA] OAEP-SHA1 decryption failed: {}", e2);
-                        println!("[RSA] Trying OAEP-SHA256 padding...");
-
-                        // Try OAEP with SHA-256 as fallback
-                        match private_key.decrypt(Oaep::new::<Sha256>(), encrypted_key) {
-                            Ok(data) => {
-                                println!("[RSA] ✓ Decrypted with OAEP-SHA256 padding");
-                                data
-                            }
-                            Err(e3) => {
-                                println!("[RSA] All decryption methods failed");
-                                println!("[RSA] This could mean:");
-                                println!("[RSA]   1. Client used a different RSA key than we sent");
-                                println!("[RSA]   2. Client is caching/hardcoding a server key");
-                                println!("[RSA]   3. Data is corrupted or in unexpected format");
-                                println!(
-                                    "[RSA]   4. Client uses a non-standard RSA padding scheme"
-                                );
-                                return Err(anyhow::anyhow!(
-                                    "Failed to decrypt with RSA (tried all padding schemes): {} / {} / {}",
-                                    e1,
-                                    e2,
-                                    e3
-                                ));
-                            }
-                        }
-                    }
-                }
-            }
-        };
-
-        println!("[RSA] Successfully decrypted {} bytes", decrypted.len());
-        println!("[RSA] Decrypted data: {}", hex::encode(&decrypted));
+        debug!(decrypted_len = decrypted.len(), "RSA decryption successful");
 
         // Extract the 16-byte AES key
         if decrypted.len() >= 16 {
             let mut key = [0u8; 16];
             key.copy_from_slice(&decrypted[0..16]);
             self.aes_key = Some(key);
-            println!("[RSA] Extracted AES session key: {}", hex::encode(&key));
+            debug!("AES session key extracted");
+        } else {
+            warn!(
+                decrypted_len = decrypted.len(),
+                "Decrypted data too short for AES key"
+            );
         }
 
         Ok(decrypted)

@@ -319,6 +319,41 @@ When working with the AI agent:
 - Request Wireshark validation after implementation
 - Keep scope focused (one message type per session)
 
+## Project Acronyms & Reminders
+
+To save typing and wrist strain, use these shorthand commands:
+
+### **RDS** - Refactor, Despaghettify, Simplify
+When you see messy code from discovery/debugging:
+- Remove debug println! statements (use tracing instead)
+- Clean up unnecessary dependencies
+- Simplify control flow
+- Remove commented-out code
+- Consolidate duplicate logic
+- Make code production-ready
+- **DO NOT** add research artifacts (PCAP frame numbers, Ghidra addresses, raw analysis notes)
+- **DO NOT** over-document implementation details that would clutter the codebase for others
+- Keep comments focused on "why" not "what" or "how we discovered this"
+- Remove experimental/diagnostic code that served its purpose during discovery
+
+### **DICK** - Do It for Clarity, Knucklehead
+When Ghidra symbols aren't renamed:
+- Rename ALL functions from `FUN_00401234` to descriptive names
+- Rename ALL variables from `param_1`, `local_8` to meaningful names
+- Rename ALL globals from `DAT_00601234` to `G_DESCRIPTIVE_NAME`
+- Add comments explaining logic
+- **Never** leave analysis work half-done
+- **CRITICAL:** Follow the ENTIRE call chain - rename ALL called functions too
+  - If `Function_A` calls `FUN_00401234`, `FUN_00405678`, and `FUN_0040abcd`, rename ALL of them
+  - Recursively follow calls until you hit well-known library functions or previously renamed functions
+  - Don't leave "islands" of renamed functions surrounded by `FUN_*` calls
+- See "Critical Ghidra Analysis Guidelines" section above for naming conventions
+
+**Usage Examples:**
+- User: "RDS this file" → Clean up all debug mess, remove unused code
+- User: "DICK this function" → Properly rename all Ghidra symbols in the specified function
+- User: "RDS and DICK" → Full cleanup + proper Ghidra renaming pass
+
 ---
 
 *This document should be updated as the project evolves and new insights are discovered.*
