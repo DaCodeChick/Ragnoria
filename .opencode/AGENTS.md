@@ -122,6 +122,11 @@
 - `migrations/` - sqlx database migrations
 - `.env.example` - Configuration template
 
+### Capture Files
+- `captures/ro2login.pcapng` - **Primary login capture** containing real RO2 client authentication flow
+  - Use this PCAP to extract real message IDs, packet structures, and authentication flow
+  - Analyze with Wireshark or `pcap_decrypt` tool
+
 ## Ghidra Integration
 
 **Available via MCP server:**
@@ -238,7 +243,7 @@ When analyzing the client in Ghidra, you **MUST** rename every symbol for clarit
 
 ## Current Status
 
-**Last Updated:** 2026-01-27
+**Last Updated:** 2026-01-30
 
 **Completed:**
 - [x] Project planning and architecture design
@@ -247,15 +252,22 @@ When analyzing the client in Ghidra, you **MUST** rename every symbol for clarit
 - [x] RFC-format protocol documentation created
 - [x] AGENTS.md guidelines document created
 - [x] Cargo workspace structure scaffolded
+- [x] ProudNet protocol implementation (RSA-1024 + AES-128 ECB)
+- [x] Login server TCP listener on port 7101
+- [x] Packet parsing and encryption/decryption
+- [x] 0x0000 handshake packet implementation
 
 **In Progress:**
-- [ ] Implementing common crate packet structures
-- [ ] Database schema design
+- [ ] Debugging 0x2EE2 login packet issue (client not sending credentials)
 
 **Blocked:**
-- Packet captures not yet available (need to run client)
-- Message ID mapping requires real traffic
-- Encryption details need deeper Ghidra analysis
+- **CRITICAL**: Client completes 0x0000 handshake but never sends 0x2EE2 login packet
+  - All protocol fields match official server
+  - Encryption works correctly
+  - Heartbeat mechanism implemented
+  - Client silently rejects handshake and disconnects
+  - See `docs/LOGIN_SERVER_STATUS.md` for detailed analysis
+  - **Next step**: Deep Ghidra analysis of client-side validation code
 
 ## Questions to Ask User
 

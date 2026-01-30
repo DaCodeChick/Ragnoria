@@ -1,6 +1,7 @@
 //! ProudNet protocol message handlers (opcodes 0x01-0x32)
 //!
 //! Handles low-level ProudNet protocol messages including:
+//! - 0x01: Disconnect notification (graceful close)
 //! - 0x2F: Flash policy request (XML response, no framing)
 //! - 0x04: Encryption handshake (send RSA public key)
 //! - 0x05: Encryption response (receive encrypted AES key)
@@ -33,7 +34,7 @@
 
 use crate::crypto::ProudNetCrypto;
 use crate::packet::framing::PacketFrame;
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 #[cfg(feature = "server")]
 use rsa::pkcs1::EncodeRsaPublicKey;
 #[cfg(feature = "server")]
@@ -188,6 +189,7 @@ impl ProudNetHandler {
     /// Returns response bytes (may or may not have ProudNet framing)
     pub fn handle(&mut self, opcode: u8, payload: &[u8]) -> Result<Option<Vec<u8>>> {
         match opcode {
+            0x01 => self.handle_disconnect_notify(payload),
             0x2F => self.handle_policy_request(),
             0x04 => Ok(None), // Client should never send 0x04
             0x05 => self.handle_encryption_response(payload),
@@ -204,6 +206,18 @@ impl ProudNetHandler {
                 Ok(None)
             }
         }
+    }
+
+    /// Handle 0x01 - Disconnect notification
+    ///
+    /// Client sends this before closing connection gracefully.
+    /// No response is required.
+    fn handle_disconnect_notify(&self, payload: &[u8]) -> Result<Option<Vec<u8>>> {
+        debug!(
+            payload_len = payload.len(),
+            "Client disconnect notification (0x01)"
+        );
+        Ok(None)
     }
 
     /// Handle 0x2F - Flash policy request
@@ -356,6 +370,17 @@ impl ProudNetHandler {
                     "Successfully decrypted AES session key"
                 );
 
+                // LOG SESSION KEY FOR WIRESHARK DECRYPTION
+                // Format: AES_SESSION_KEY: <hex>
+                // This allows us to decrypt captured traffic later
+                if session_key.len() >= 16 {
+                    eprintln!(
+                        "🔑 AES_SESSION_KEY [{}]: {}",
+                        self.remote_addr,
+                        hex::encode(&session_key[0..16])
+                    );
+                }
+
                 // Mark encryption as ready
                 self.encryption_ready = true;
 
@@ -443,10 +468,39 @@ impl ProudNetHandler {
     ///
     /// Client sends this periodically (~5 seconds) with timestamp data.
     /// Server must respond with 0x1D (heartbeat ACK).
-    fn handle_heartbeat_request(&self, _payload: &[u8]) -> Result<Option<Vec<u8>>> {
-        // Send 0x1D (Heartbeat ACK)
-        let response = PacketFrame::new(vec![0x1D]);
+    fn handle_heartbeat_request(&self, payload: &[u8]) -> Result<Option<Vec<u8>>> {
+        // Send 0x1D (Heartbeat ACK) with extended format (17 bytes total)
+        // The client sends a heartbeat with sequence number and expects it echoed back
 
+        // Extract sequence number from client's payload (bytes 0-1 after opcode was already stripped)
+        let sequence = if payload.len() >= 2 {
+            [payload[0], payload[1]]
+        } else {
+            [0x00, 0x00]
+        };
+
+        // Build extended heartbeat response (17 bytes)
+        let mut response_payload = vec![
+            0x1D, // Opcode
+            sequence[0],
+            sequence[1], // Echo client's sequence number
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00, // Reserved (8 bytes)
+            0x00,
+            0x00,
+            0x00,
+            0x00, // Unknown field (4 bytes)
+            0x00,
+            0x00, // Padding (2 bytes)
+        ];
+
+        let response = PacketFrame::new(response_payload);
         Ok(Some(response.to_bytes()))
     }
 
@@ -476,6 +530,33 @@ impl ProudNetHandler {
         }
 
         self.crypto.decrypt_packet_0x25(payload)
+    }
+
+    /// Encrypt a game message payload and wrap in 0x25 packet
+    pub fn encrypt_packet(&self, payload: &[u8]) -> Result<Vec<u8>> {
+        if !self.encryption_ready {
+            return Err(anyhow!("Encryption not ready"));
+        }
+
+        // Encrypt the payload
+        let encrypted = self.crypto.encrypt_aes_ecb(payload)?;
+
+        // Build 0x25 packet frame
+        // Structure: [opcode] [flags:3bytes] [encrypted data]
+        // Flags observed from captures: 0x01 0x01 0x20
+        let mut packet_data = vec![
+            0x25, // Opcode (encrypted message)
+            0x01, // Flag byte 1
+            0x01, // Flag byte 2
+            0x20, // Flag byte 3
+        ];
+
+        // Add encrypted data
+        packet_data.extend_from_slice(&encrypted);
+
+        // Wrap in ProudNet frame (adds magic + varint size)
+        let frame = PacketFrame::new(packet_data);
+        Ok(frame.to_bytes())
     }
 }
 

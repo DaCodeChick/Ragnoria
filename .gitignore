@@ -21,10 +21,10 @@ target
 #.idea/
 
 # Ragnoria specific
-# Packet captures may contain sensitive data
-docs/captures/*.pcapng
-docs/captures/*.pcap
-docs/captures/*_hex.txt
+# Packet captures may contain sensitive data (ignore everywhere)
+*.pcapng
+*.pcap
+*_hex.txt
 
 # Database files
 *.db

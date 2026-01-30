@@ -196,6 +196,12 @@ impl ClientConnection {
 
         // Handle based on opcode
         match opcode {
+            0x01 => {
+                info!("[{}] 0x01: Disconnect notification", self.addr);
+                self.handler.handle(0x01, &packet.payload)?;
+                // Client is closing - we can gracefully terminate
+            }
+
             0x2F => {
                 info!("[{}] 0x2F: Policy request", self.addr);
                 if let Some(response) = self.handler.handle(0x2F, &packet.payload)? {
@@ -305,10 +311,105 @@ impl ClientConnection {
                             match game_opcode {
                                 0x0000 => {
                                     info!(
-                                        "[{}] Game message 0x0000: Initial handshake? Data: {}",
-                                        self.addr,
-                                        hex::encode(&decrypted[2..decrypted.len().min(18)])
+                                        "[{}] Game message 0x0000: Initial handshake",
+                                        self.addr
                                     );
+                                    info!(
+                                        "[{}] Full payload: {}",
+                                        self.addr,
+                                        hex::encode(&decrypted)
+                                    );
+                                    
+                                    // Client packet structure (26 bytes):
+                                    // 0x00-0x01: Opcode 0x0000
+                                    // 0x02-0x03: 0x01E1 (version/build?)
+                                    // 0x04-0x05: 0x2E10 (4142 decimal - another version?)
+                                    // 0x06-0x07: 0x0021
+                                    // 0x08-0x0B: 0xCBA416F1 (timestamp/GUID?)
+                                    // 0x0C-0x0D: 0x0001
+                                    // 0x0E-0x11: 0x00000001 (capability flags?)
+                                    // 0x12-0x15: 0x07022500 
+                                    // 0x16-0x19: 0x803F0000 (float 1.0 in LE: 00 00 80 3f)
+                                    
+                                    // Generate a server GUID (use timestamp)
+                                    use std::time::{SystemTime, UNIX_EPOCH};
+                                    let server_guid = SystemTime::now()
+                                        .duration_since(UNIX_EPOCH)
+                                        .unwrap()
+                                        .as_secs() as u32;
+                                    
+                                    info!("[{}] Sending 0x0000 server response", self.addr);
+                                    
+                                    // Extract client's values to mirror them EXACTLY
+                                    let client_version = if decrypted.len() >= 4 {
+                                        [decrypted[2], decrypted[3]]
+                                    } else {
+                                        [0x01, 0xE1]
+                                    };
+                                    let client_build = if decrypted.len() >= 6 {
+                                        [decrypted[4], decrypted[5]]
+                                    } else {
+                                        [0x2E, 0x10]
+                                    };
+                                    let client_field1 = if decrypted.len() >= 8 {
+                                        [decrypted[6], decrypted[7]]
+                                    } else {
+                                        [0x00, 0x21]
+                                    };
+                                    let client_field2 = if decrypted.len() >= 14 {
+                                        [decrypted[12], decrypted[13]]
+                                    } else {
+                                        [0x00, 0x01]
+                                    };
+                                    let client_field3 = if decrypted.len() >= 20 {
+                                        [decrypted[18], decrypted[19], decrypted[20], decrypted[21]]
+                                    } else {
+                                        [0x07, 0x02, 0x25, 0x00]
+                                    };
+                                    let client_field4 = if decrypted.len() >= 26 {
+                                        [decrypted[22], decrypted[23], decrypted[24], decrypted[25]]
+                                    } else {
+                                        [0x80, 0x3F, 0x00, 0x00]
+                                    };
+                                    
+                                    // Extract the "status" field from client (bytes 14-17)
+                                    // CRITICAL FIX: Client sends 0x00000001 here, we MUST mirror it!
+                                    let client_status = if decrypted.len() >= 18 {
+                                        [decrypted[14], decrypted[15], decrypted[16], decrypted[17]]
+                                    } else {
+                                        [0x00, 0x00, 0x00, 0x01]
+                                    };
+                                    
+                                    // Mirror client's exact bytes, only change the GUID field
+                                    // Convert server_guid to little-endian bytes
+                                    let guid_bytes = server_guid.to_le_bytes();
+                                    
+                                    let response = vec![
+                                        0x00, 0x00, // Opcode 0x0000
+                                        client_version[0], client_version[1], // Mirror version
+                                        client_build[0], client_build[1], // Mirror build
+                                        client_field1[0], client_field1[1], // Mirror field
+                                        guid_bytes[0], guid_bytes[1], guid_bytes[2], guid_bytes[3], // Server GUID (timestamp-based)
+                                        client_field2[0], client_field2[1], // Mirror field
+                                        client_status[0], client_status[1], client_status[2], client_status[3], // Mirror client status
+                                        client_field3[0], client_field3[1], client_field3[2], client_field3[3], // Mirror field
+                                        client_field4[0], client_field4[1], client_field4[2], client_field4[3], // Mirror field EXACTLY
+                                    ];
+                                    
+                                    info!("[{}] Response payload: {}", self.addr, hex::encode(&response));
+                                    
+                                    if let Ok(encrypted) = self.handler.encrypt_packet(&response) {
+                                        if let Err(e) = self.stream.write_all(&encrypted).await {
+                                            error!("[{}] Failed to send 0x0000 response: {}", self.addr, e);
+                                        } else {
+                                            let _ = self.stream.flush().await;
+                                            info!("[{}] Sent 0x0000 response successfully ({} bytes encrypted)", self.addr, encrypted.len());
+                                            info!("[{}] Initial handshake complete - login now enabled", self.addr);
+                                        }
+                                    } else {
+                                        error!("[{}] Failed to encrypt 0x0000 response", self.addr);
+                                        return Ok(());
+                                    }
                                 }
                                 _ if game_opcode >= 0x1000 => {
                                     info!(
