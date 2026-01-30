@@ -369,6 +369,8 @@ impl ClientConnection {
                                     let client_field4 = if decrypted.len() >= 26 {
                                         [decrypted[22], decrypted[23], decrypted[24], decrypted[25]]
                                     } else {
+                                        // Default: client typically sends 0x803f0000 here
+                                        // Note: This is NOT float 1.0 (which would be 0x0000803f in LE)
                                         [0x80, 0x3F, 0x00, 0x00]
                                     };
                                     
