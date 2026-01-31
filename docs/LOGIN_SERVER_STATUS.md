@@ -167,3 +167,34 @@ The root cause remains unidentified despite extensive PCAP analysis and multiple
 
 Last Updated: 2026-01-30
 Status: Blocked - Requires deeper client analysis
+
+## Update: Field Interpretation Discovery
+
+**Date:** 2026-01-30 (late night session)
+
+**User Insight:** The bytes at offset 22-25 (`80 3f 00 00`) might not be a single 32-bit float.
+
+**Analysis:**
+- Client sends: `80 3f 00 00`
+- Reading as LE uint16 values: `0x3f80` and `0x0000`
+- **Key observation:** `0x3f80` is significant - it's the first two bytes of big-endian float 1.0 (`3f 80 00 00`)
+- This could be TWO 16-bit fields, not ONE 32-bit field
+
+**Possible Interpretations:**
+1. Two uint16 values: `0x3f80` (16,256) and `0x0000` (0)
+2. Two float16 (half-precision) values
+3. Some other paired 16-bit data
+
+**Also Note - Bytes 18-21:**
+- Value: `07 02 25 00`
+- Could be version-like: 7.2.37.0?
+- Or timestamp/build number
+- Need to investigate what this represents
+
+**Next Steps:**
+- Find the client code that reads these fields from the 0x0000 response
+- Determine if they're read as 16-bit or 32-bit values
+- Check if there's any validation on the `0x3f80` value
+- See if this might be related to game version, protocol version, or some flag
+
+This might be the key to understanding why our handshake is rejected!
