@@ -205,8 +205,9 @@ impl Launcher {
             .parent()
             .ok_or_else(|| anyhow::anyhow!("Invalid game directory structure"))?;
 
-        // Build command line arguments
+        // Build command line arguments  
         // Format: /FROM=-FromLauncher /IP=127.0.0.1
+        // Normal mode: Shows login UI with username/password fields
         let args = vec![
             String::from("/FROM=-FromLauncher"),
             format!("/IP={}", server_ip),

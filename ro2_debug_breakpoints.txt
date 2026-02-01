@@ -1,0 +1,9 @@
+// RO2 Login Flow Debugging Script
+// Load this in x64dbg after attaching to Rag2.exe
+
+// MOST CRITICAL: Login send functions - should hit when Login clicked
+bp 0x00A6DE40  // GameUI_SendNormalModeLogin
+bp 0x00A6E200  // GameUI_SendStarterModeLogin
+
+// Stage tracking
+bp 0x00636630  // StageLogin_Enter

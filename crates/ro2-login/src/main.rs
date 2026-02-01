@@ -366,13 +366,14 @@ impl ClientConnection {
                                     } else {
                                         [0x07, 0x02, 0x25, 0x00]
                                     };
+                                    // CRITICAL TEST: Mirror client's exact value
                                     let client_field4 = if decrypted.len() >= 26 {
                                         [decrypted[22], decrypted[23], decrypted[24], decrypted[25]]
                                     } else {
-                                        // Default: client typically sends 0x803f0000 here
-                                        // Note: This is NOT float 1.0 (which would be 0x0000803f in LE)
                                         [0x80, 0x3F, 0x00, 0x00]
                                     };
+                                    
+                                    info!("[{}] TESTING: Mirroring client's 0x803F0000 exactly", self.addr);
                                     
                                     // Extract the "status" field from client (bytes 14-17)
                                     // CRITICAL FIX: Client sends 0x00000001 here, we MUST mirror it!
@@ -382,9 +383,10 @@ impl ClientConnection {
                                         [0x00, 0x00, 0x00, 0x01]
                                     };
                                     
-                                    // Mirror client's exact bytes, only change the GUID field
-                                    // Convert server_guid to little-endian bytes
+                                    // Server should send its OWN GUID, not mirror client's
                                     let guid_bytes = server_guid.to_le_bytes();
+                                    
+                                    info!("[{}] Using server GUID: 0x{:08x}", self.addr, server_guid);
                                     
                                     let response = vec![
                                         0x00, 0x00, // Opcode 0x0000
@@ -398,19 +400,77 @@ impl ClientConnection {
                                         client_field4[0], client_field4[1], client_field4[2], client_field4[3], // Mirror field EXACTLY
                                     ];
                                     
-                                    info!("[{}] Response payload: {}", self.addr, hex::encode(&response));
+                                    info!("[{}] Response payload ({} bytes): {}", self.addr, response.len(), hex::encode(&response));
+                                    
+                                    // Add a small delay (official server has ~20ms delay)
+                                    tokio::time::sleep(tokio::time::Duration::from_millis(20)).await;
                                     
                                     if let Ok(encrypted) = self.handler.encrypt_packet(&response) {
+                                        info!("[{}] Encrypted packet breakdown:", self.addr);
+                                        info!("[{}]   Total length: {} bytes", self.addr, encrypted.len());
+                                        info!("[{}]   Full hex: {}", self.addr, hex::encode(&encrypted));
+                                        
+                                        // Parse and display structure
+                                        if encrypted.len() >= 8 {
+                                            info!("[{}]   Magic: {:02x} {:02x}", self.addr, encrypted[0], encrypted[1]);
+                                            info!("[{}]   Varint size: {}", self.addr, encrypted[2]);
+                                            if encrypted[2] == 1 {
+                                                info!("[{}]   Payload length: {} (0x{:02x})", self.addr, encrypted[3], encrypted[3]);
+                                                info!("[{}]   Opcode: 0x{:02x}", self.addr, encrypted[4]);
+                                                if encrypted.len() > 7 {
+                                                    info!("[{}]   Flags: 0x{:02x} 0x{:02x} 0x{:02x}", self.addr, encrypted[5], encrypted[6], encrypted[7]);
+                                                }
+                                                if encrypted.len() > 8 {
+                                                    let enc_data = &encrypted[8..];
+                                                    info!("[{}]   Encrypted data: {} bytes", self.addr, enc_data.len());
+                                                    info!("[{}]   First 32 bytes: {}", self.addr, hex::encode(&enc_data[..enc_data.len().min(32)]));
+                                                }
+                                            }
+                                        }
+                                        
                                         if let Err(e) = self.stream.write_all(&encrypted).await {
                                             error!("[{}] Failed to send 0x0000 response: {}", self.addr, e);
                                         } else {
                                             let _ = self.stream.flush().await;
-                                            info!("[{}] Sent 0x0000 response successfully ({} bytes encrypted)", self.addr, encrypted.len());
-                                            info!("[{}] Initial handshake complete - login now enabled", self.addr);
+                                            info!("[{}] ✓ Sent 0x0000 response successfully", self.addr);
+                                            info!("[{}] Initial handshake complete - login should now work", self.addr);
                                         }
                                     } else {
                                         error!("[{}] Failed to encrypt 0x0000 response", self.addr);
                                         return Ok(());
+                                    }
+                                }
+                                0x2EE2 => {
+                                    info!(
+                                        "[{}] 🎮 ReqLogin (0x2EE2) - LOGIN REQUEST!",
+                                        self.addr
+                                    );
+                                    info!(
+                                        "[{}] Login packet payload: {} bytes",
+                                        self.addr,
+                                        decrypted.len()
+                                    );
+                                    
+                                    // Call login handler
+                                    match handlers::handle_req_login(&decrypted).await {
+                                        Ok(response) => {
+                                            info!("[{}] Login handler returned success response", self.addr);
+                                            
+                                            // Encrypt and send response
+                                            if let Ok(encrypted) = self.handler.encrypt_packet(&response) {
+                                                if let Err(e) = self.stream.write_all(&encrypted).await {
+                                                    error!("[{}] Failed to send AckLogin: {}", self.addr, e);
+                                                } else {
+                                                    let _ = self.stream.flush().await;
+                                                    info!("[{}] ✅ Sent AckLogin (0x30D5) successfully!", self.addr);
+                                                }
+                                            } else {
+                                                error!("[{}] Failed to encrypt AckLogin response", self.addr);
+                                            }
+                                        }
+                                        Err(e) => {
+                                            error!("[{}] Login handler failed: {}", self.addr, e);
+                                        }
                                     }
                                 }
                                 _ if game_opcode >= 0x1000 => {

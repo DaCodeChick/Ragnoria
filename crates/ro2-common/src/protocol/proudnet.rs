@@ -419,8 +419,9 @@ impl ProudNetHandler {
             "Client version check"
         );
 
-        // Generate session ID
-        self.session_id = Some(rand::random::<u32>());
+        // Generate session ID (use LOW value like official server: 14322)
+        // Official server uses very low session IDs, not random large values
+        self.session_id = Some(rand::random::<u16>() as u32);
 
         // Send 0x0A (Connection success with session ID)
         self.build_connection_success()
