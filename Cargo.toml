@@ -4,7 +4,7 @@ members = [
     "crates/ro2-login",
     "crates/ro2-lobby",
     "crates/ro2-world",
-    "crates/packet-analyzer", "crates/launcher",
+    "crates/packet-analyzer", "crates/launcher", "crates/ro2-patcher",
 ]
 resolver = "2"
 

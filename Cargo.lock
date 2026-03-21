@@ -3894,11 +3894,22 @@ dependencies = [
  "config",
  "dotenvy",
  "hex",
+ "rand 0.8.5",
  "ro2-common",
  "sqlx",
  "tokio",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "ro2-patcher"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "hex",
+ "sha2",
 ]
 
 [[package]]
